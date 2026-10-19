@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "mask_complete": false,
+  "camera_component": "outputs/l2bp3_camera_full_001/components/component_003",
+  "frames": {
+    "source_000073": {
+      "image_sha256": "3d4673807b1855e85a5de4aac7759baf34979bca6c2c7191a14d8711d35625f6",
+      "manual_people_boxes": [],
+      "glass_polygons": []
+    },
+    "source_000209": {
+      "image_sha256": "bf501d76d377944e91ec67d5cda5af903bb7e34b0c4f8cbfdefc43f52de9052b",
+      "manual_people_boxes": [],
+      "glass_polygons": []
+    },
+    "source_000338": {
+      "image_sha256": "e2724d1167cc3d8ac64e3d1d7ca5a8fb0f6e7113e969379c1d4939f4ae3b0818",
+      "manual_people_boxes": [],
+      "glass_polygons": []
+    }
+  }
+}

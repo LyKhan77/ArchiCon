@@ -1,0 +1,18 @@
+schema_version: 1
+profile: room-tour
+processing:
+  keyframe_target_fps: 2
+  matching: auto
+  max_exhaustive_frames: 400
+  depth_resolution: 504
+  confidence_quantile: 0.02
+  voxel_divisor: 80
+  sdf_voxels: 8
+  max_refinement_rounds: 2
+  max_candidates_per_round: 2
+review:
+  provider: manual
+  required: true
+  max_images: 12
+delivery:
+  root: end_product

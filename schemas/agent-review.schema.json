@@ -1,0 +1,183 @@
+{
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "enum": [
+        1
+      ]
+    },
+    "job_id": {
+      "type": "string"
+    },
+    "review_round": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "review_input_sha256": {
+      "type": "string"
+    },
+    "decision": {
+      "type": "string",
+      "enum": [
+        "accept",
+        "refine",
+        "needs_capture",
+        "needs_human_review"
+      ]
+    },
+    "quality_status": {
+      "type": "string",
+      "enum": [
+        "unassessed",
+        "accepted",
+        "accepted_partial",
+        "needs_capture",
+        "rejected"
+      ]
+    },
+    "summary": {
+      "type": "string"
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "minor",
+              "major",
+              "critical"
+            ]
+          },
+          "component_id": {
+            "type": "string"
+          },
+          "time_range_seconds": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "observation": {
+            "type": "string"
+          },
+          "hypothesis": {
+            "type": "string"
+          },
+          "confidence": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ]
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "none",
+              "needs_capture",
+              "needs_measurement",
+              "needs_human_review",
+              "compare_filter_candidates",
+              "adjust_viewer_mesh"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "severity",
+          "component_id",
+          "time_range_seconds",
+          "evidence",
+          "observation",
+          "hypothesis",
+          "confidence",
+          "action"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "refinement_requests": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "finding_id": {
+            "type": "string"
+          },
+          "start_stage": {
+            "type": "string",
+            "enum": [
+              "S06",
+              "S07"
+            ]
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "compare_filter_candidates",
+              "adjust_viewer_mesh"
+            ]
+          }
+        },
+        "required": [
+          "finding_id",
+          "start_stage",
+          "action"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required_user_actions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "scale_status": {
+      "type": "string",
+      "enum": [
+        "relative",
+        "externally_calibrated_draft",
+        "validated"
+      ]
+    },
+    "full_room_reconstruction_complete": {
+      "type": "boolean"
+    },
+    "selected_candidate_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "job_id",
+    "review_round",
+    "review_input_sha256",
+    "decision",
+    "quality_status",
+    "summary",
+    "findings",
+    "refinement_requests",
+    "required_user_actions",
+    "scale_status",
+    "full_room_reconstruction_complete",
+    "selected_candidate_id"
+  ],
+  "additionalProperties": false
+}

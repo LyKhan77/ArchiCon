@@ -1,0 +1,22 @@
+schema_version: 1
+profile: local
+role: development_and_review
+paths:
+  # Replace with the absolute checkout path on your laptop.
+  project_root: /absolute/path/to/ArchiCon
+  input_video: raw_videos/source.MOV
+  manifests: data/manifests
+  review: data/review
+  outputs: outputs
+compute:
+  gpu_enabled: false
+server:
+  # Use an SSH alias or user@host that your local SSH client can authenticate.
+  ssh_target: gpu-server
+  project_root: /srv/archicon
+sync:
+  file_allowlist: .sync-files
+  include_media: false
+  include_credentials: false
+  include_environments: false
+  include_outputs: false

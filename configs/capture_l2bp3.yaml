@@ -1,0 +1,38 @@
+schema_version: 1
+capture_id: l2bp3
+input_video: raw_videos/lantai2_B_part3.MOV
+verified_metadata:
+  sha256: 2247b1b154b1f26dd4f85e90ca3a5d8afb28a73bf76348964448c1b44cff1955
+  size_bytes: 444210009
+  duration_seconds: 150.84
+  codec: h264
+  pixel_format: yuv420p
+  encoded_width: 1920
+  encoded_height: 1080
+  display_matrix_rotation_degrees: -90
+  display_width: 1080
+  display_height: 1920
+  nominal_frame_rate: 60000/1001
+  average_frame_rate: 25125/419
+  color_primaries: bt709
+  color_transfer: bt709
+  color_space: bt709
+capture_description:
+  device_user_reported: iPhone 13 mini
+  lens_user_reported: 0.5x
+  lens_verified_from_metadata: false
+decode_policy:
+  orientation: apply_display_matrix_once
+  timestamps: decoder_presentation_timestamps
+  audio_used: false
+sampling:
+  target_fps: 2.0
+  selection: sharpest_per_temporal_window
+  max_keyframes: 320
+  preserve_low_texture_continuity: true
+review:
+  initial_contact_sheet_inspected: true
+  dense_quality_audit_complete: true
+  audit_run: l2bp3_audit_local_002
+  review_scope: full_video_automated_scan_and_contact_sheets_plus_dense_pilot_manual_review
+  semantic_masks_complete: false

@@ -1,0 +1,31 @@
+schema_version: 1
+profile: server
+role: gpu_processing
+paths:
+  project_root: /srv/archicon
+  input_video: raw_videos/source.MOV
+  manifests: data/manifests
+  review: data/review
+  outputs: outputs
+  model_cache: models/huggingface
+  legacy_stream: data/legacy/l2bp3_stream
+  legacy_viewer: data/legacy/l2bp3_viewer
+  legacy_project: /srv/archicon-legacy
+compute:
+  # Replace with the exact UUID of the one authorized device; never expose all GPUs.
+  gpu_selector: GPU-REPLACE-WITH-AUTHORIZED-DEVICE-UUID
+  logical_device_after_isolation: cuda:0
+  min_gpu_free_gib: 14
+  min_host_available_gib: 8
+  min_disk_free_gib: 50
+  target_process_gpu_gib: 14
+  target_torch_allocated_gib: 12
+  target_host_rss_gib: 6
+  cpu_threads: 4
+  workers: 2
+external_sources:
+  policy: read_only_by_convention
+  video: /srv/archicon-legacy/data/raw_videos/source.MOV
+  huggingface_cache: /srv/model-cache/huggingface/hub
+  legacy_stream: /srv/archicon-legacy/outputs/stream_l2bp3
+  legacy_viewer: /srv/archicon-legacy/outputs/web/l2bp3

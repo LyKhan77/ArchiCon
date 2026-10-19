@@ -1,0 +1,23 @@
+{
+  "audit_run": "l2bp3_audit_local_002",
+  "camera_run": "l2bp3_camera_full_001",
+  "components": [
+    {
+      "id": "main",
+      "name": "Area utama",
+      "camera_component": "outputs/l2bp3_camera_corrected_001",
+      "depth_run": "l2bp3_depth_full_002",
+      "surface_run": "l2bp3_surface_full_002",
+      "render_run": "l2bp3_render_full_002"
+    },
+    {
+      "id": "entrance",
+      "name": "Pintu masuk · world terpisah",
+      "camera_component": "outputs/l2bp3_camera_full_001/components/component_003",
+      "depth_run": "l2bp3_depth_entry_001",
+      "surface_run": "l2bp3_surface_entry_001",
+      "render_run": "l2bp3_render_entry_001"
+    }
+  ],
+  "tour_run": "l2bp3_room_tour_005"
+}

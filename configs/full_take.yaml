@@ -1,0 +1,41 @@
+schema_version: 1
+profile: full_take
+execution_phase: coverage_mesh
+capture_config: configs/capture_l2bp3.yaml
+machine_config_required: true
+prerequisites:
+  required_gates:
+    - pilot_camera_gate
+    - pilot_depth_gate
+    - chosen_config_recorded
+  gaussian_training_only:
+    - backend_kernel_test
+range:
+  start_seconds: 0
+  end_seconds: 150.84
+processing:
+  selection: all_audited_keyframes
+  production_uses_original_validation: true
+  full_input_keyframe_count: 302
+  preserve_original_audit_split_metadata: true
+  global_camera_frame_required: true
+  bounded_frame_cache_required: true
+  checkpoint_each_stage: true
+  separate_unregistered_submaps: true
+  quarantine_extreme_camera_centers: true
+  expose_unregistered_intervals: true
+  mild_mesh_holes_acceptable: true
+  depth_window_views_max: 16
+  depth_stride: 12
+  process_resolution: 504
+  confidence_quantile: 0.02
+  retain_noncontradicted_unsupported_depths_as_uncertain: true
+  voxel_divisor: 80
+  sdf_trunc_voxels: 8
+output:
+  run_id_required: true
+  overwrite_existing_run: false
+  export_mesh: true
+  export_gaussian_splat: false
+  gaussian_splat_status: deferred_until_mesh_coverage_and_kernel_validation
+  export_coverage_report: true

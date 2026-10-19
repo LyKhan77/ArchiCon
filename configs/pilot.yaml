@@ -1,0 +1,36 @@
+schema_version: 1
+profile: pilot
+capture_config: configs/capture_l2bp3.yaml
+machine_config_required: true
+segments:
+  primary:
+    start_seconds: 15
+    end_seconds: 45
+  stress:
+    start_seconds: 110
+    end_seconds: 140
+  selection_status: retained_after_dense_pilot_review
+  selection_review: outputs/l2bp3_audit_local_002/reports/manual_review.md
+evaluation:
+  split_seed: 7
+  validation_fraction: 0.2
+  split_strategy: temporal_blocks
+  exclude_validation_from_scene_training: true
+depth:
+  model_registry_key: da3_large_legacy
+  camera_conditioning: verified_global_cameras
+  initial_window_views: 16
+  initial_process_resolution: 504
+  precision: bfloat16
+  dtype_on_disk: float32
+  scale_status_before_calibration: relative
+  unload_model_between_stages: true
+optimization:
+  initial_rgb_longest_edge: 960
+  review_steps:
+    - 3000
+    - 7000
+  enable_mapanything: false
+output:
+  run_id_required: true
+  overwrite_existing_run: false

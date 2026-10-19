@@ -1,0 +1,20 @@
+{
+  "title": "Lantai 2 · ruang dan lintasan",
+  "source": "raw_videos/lantai2_B_part3.MOV",
+  "components": [
+    {
+      "id": "main",
+      "name": "Area utama · 6.89–148.06 dtk",
+      "mesh": "outputs/l2bp3_full_delivery_001/room-full.glb",
+      "render_manifest": "outputs/l2bp3_render_full_002/manifest.json",
+      "cameras": "outputs/l2bp3_camera_corrected_001/undistorted/cameras.json"
+    },
+    {
+      "id": "entrance",
+      "name": "Pintu masuk · komponen terpisah",
+      "mesh": "outputs/l2bp3_full_delivery_001/entrance-local.glb",
+      "render_manifest": "outputs/l2bp3_render_entry_001/manifest.json",
+      "cameras": "outputs/l2bp3_camera_full_001/components/component_003/undistorted/cameras.json"
+    }
+  ]
+}

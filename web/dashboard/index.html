@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#161616">
+  <title>ArchiCon — Rekonstruksi ruang</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath fill='%230f62fe' d='M0 0h32v32H0z'/%3E%3Cpath fill='none' stroke='white' d='m8 22 8-15 8 15M11 17h10'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/dashboard.css">
+  <script src="/dashboard.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Lewati navigasi</a>
+  <header class="topbar">
+    <a href="/" class="brand" aria-label="ArchiCon beranda"><svg viewBox="0 0 28 28" aria-hidden="true"><path d="m4 22 10-17 10 17M8 16h12M14 5v17"/></svg>ArchiCon</a>
+    <span class="product-name">Rekonstruksi ruang</span>
+    <div class="top-meta"><span>Review manual</span><span id="connection" class="connection">Menghubungkan…</span></div>
+  </header>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Daftar rekonstruksi">
+      <div class="workspace-label">Workspace lokal <span class="small-mark">01</span></div>
+      <button id="new-job" class="button primary new-job">Rekonstruksi baru <span aria-hidden="true">＋</span></button>
+      <div class="sidebar-heading">Riwayat rekonstruksi <span id="job-count">0</span></div>
+      <nav id="job-list" class="job-list" aria-label="Job tersimpan"><p class="muted sidebar-empty">Memuat riwayat…</p></nav>
+      <div class="sidebar-footer"><span class="tiny-grid" aria-hidden="true">▦</span><div>Video → ruang digital<small>Mesh · Denah · Room tour</small></div></div>
+    </aside>
+    <main id="main" tabindex="-1">
+      <div id="alert" class="alert" role="alert" hidden><span id="alert-text"></span><button id="dismiss-alert" aria-label="Tutup pesan">×</button></div>
+      <div class="page-heading"><div><p class="eyebrow" id="breadcrumb">Workspace / Rekonstruksi baru</p><h1 id="page-title">Dari rekaman, menjadi ruang.</h1><p id="page-subtitle" class="page-subtitle">Unggah video ruangan. Ikuti prosesnya. Jelajahi hasilnya.</p></div><span class="heading-index" aria-hidden="true">A / 01</span></div>
+      <div class="tabs" role="tablist" aria-label="Tahap rekonstruksi">
+        <button id="tab-input" role="tab" aria-selected="true" aria-controls="panel-input" data-tab="input"><span>01</span> Input video</button>
+        <button id="tab-progress" role="tab" aria-selected="false" aria-controls="panel-progress" data-tab="progress" tabindex="-1"><span>02</span> Progress</button>
+        <button id="tab-output" role="tab" aria-selected="false" aria-controls="panel-output" data-tab="output" tabindex="-1"><span>03</span> Hasil akhir</button>
+      </div>
+
+      <section id="panel-input" role="tabpanel" aria-labelledby="tab-input">
+        <div class="section-intro"><h2>Mulai dari ruang Anda.</h2><p>Video dari iPhone atau kamera biasa. Kamera 360° tidak diperlukan.</p></div>
+        <div class="input-grid">
+          <form id="input-form">
+            <label class="field-label" for="video-file">Video ruangan</label>
+            <label class="drop-zone" id="drop-zone" for="video-file"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 22V4m-6 6 6-6 6 6M5 20v8h22v-8"/></svg><strong id="file-name">Pilih atau letakkan video di sini</strong><span id="file-help">MOV, MP4, M4V, WebM, AVI, MKV · maks. 20 GiB</span><span class="file-action">Pilih video ↗</span><input id="video-file" type="file" accept=".mov,.mp4,.m4v,.webm,.avi,.mkv,video/*"></label>
+            <div class="or-rule"><span>atau gunakan video lokal</span></div>
+            <label class="field-label" for="existing-video">Video di folder raw_videos</label>
+            <select id="existing-video"><option value="">Pilih video yang sudah tersedia</option></select>
+            <label class="field-label spaced" for="job-id">ID rekonstruksi</label>
+            <input id="job-id" name="job-id" type="text" required maxlength="32" pattern="[A-Za-z0-9][A-Za-z0-9_\-]{0,31}" placeholder="ruang_rapat_001" autocomplete="off" spellcheck="false" aria-describedby="job-help">
+            <p id="job-help" class="helper">ID baru, 1–32 karakter. Huruf, angka, tanda hubung, atau underscore.</p>
+            <div class="upload-state" id="upload-state" hidden><div><span id="upload-label">Mengunggah ke laptop</span><button type="button" class="text-button" id="cancel-upload">Batalkan</button></div><progress id="upload-progress" max="100" value="0"></progress></div>
+            <p id="busy-notice" class="inline-notice" hidden></p>
+            <button type="submit" id="start-job" class="button primary submit-button">Mulai rekonstruksi <span aria-hidden="true">→</span></button>
+            <p class="helper below-button">Proses berjalan di server GPU. Hasil disiapkan untuk review manual.</p>
+          </form>
+          <div class="input-preview"><div class="preview-header"><span>Preview sumber</span><span id="video-meta">Belum ada video</span></div><video id="source-video" controls preload="metadata" hidden></video><div id="video-empty" class="video-empty"><svg viewBox="0 0 160 144" aria-hidden="true"><path d="m20 110 60 24 60-24V34L80 10 20 34zm0-76 60 24 60-24M80 58v76M20 110l60-24 60 24M80 10v76M50 46v76M110 46v76M20 72l60 24 60-24"/></svg><p>Setiap ruang dimulai<br>dengan satu rekaman.</p></div><div class="capture-notes"><h3>Untuk geometri yang lebih baik</h3><p>Berjalan perlahan, jaga overlap antar sudut, dan rekam pintu penghubung. Ambil lantai serta dinding dari beberapa posisi.</p><div><span>01 <b>Video stabil</b></span><span>02 <b>Overlap cukup</b></span><span>03 <b>Semua ruang terlihat</b></span></div></div></div>
+        </div>
+        <div class="footnote"><span>Ukuran relatif</span><p>Dimensi meter memerlukan satu ukuran nyata sebagai acuan kalibrasi setelah rekonstruksi.</p></div>
+      </section>
+
+      <section id="panel-progress" role="tabpanel" aria-labelledby="tab-progress" hidden>
+        <div id="progress-empty" class="empty-panel"><h2>Proses terlihat, langkah demi langkah.</h2><p>Mulai rekonstruksi baru atau pilih job dari riwayat untuk melihat progress.</p></div>
+        <div id="progress-content" hidden>
+          <div class="section-intro status-intro"><div><p class="eyebrow">Status proses</p><h2 id="phase-title">Menyiapkan rekonstruksi</h2></div><div><span id="execution-badge" class="status-label">—</span><button class="button tertiary" id="resume-job" hidden>Lanjutkan proses →</button></div></div>
+          <p id="telemetry-note" class="inline-notice" hidden></p>
+          <div class="metrics"><div><span>Frame terdaftar</span><strong id="metric-frames">—</strong></div><div><span>Gap kamera</span><strong id="metric-gaps">—</strong></div><div><span id="elapsed-label">Durasi stage</span><strong id="metric-elapsed">—</strong></div><div><span>Review kualitas</span><strong id="metric-review" class="metric-text">Belum dinilai</strong></div></div>
+          <div class="progress-grid"><div><h3 class="block-heading">Tahapan rekonstruksi</h3><ol id="stage-list" class="stage-list"></ol><p class="helper">Status berdasarkan catatan proses. Durasi tiap stage bervariasi.</p></div><div><h3 class="block-heading">Preview dari proses</h3><div id="live-previews" class="live-previews"><p class="muted">Contact sheet dan render muncul setelah stage terkait selesai.</p></div></div></div>
+          <details class="log-panel"><summary>Log proses <span>Detail teknis</span></summary><pre id="process-log">Belum ada log.</pre></details>
+        </div>
+      </section>
+
+      <section id="panel-output" role="tabpanel" aria-labelledby="tab-output" hidden>
+        <div id="output-empty" class="empty-panel"><h2>Ruang digital Anda akan ada di sini.</h2><p>Mesh, denah, dan room tour tersedia setelah proses dan pemeriksaan browser selesai.</p></div>
+        <div id="output-content" hidden>
+          <div class="section-intro status-intro"><div><p class="eyebrow">Hasil rekonstruksi</p><h2>Jelajahi ruang Anda.</h2></div><a id="download-package" class="button primary" href="#">Unduh paket <span aria-hidden="true">↓</span></a></div>
+          <div id="review-note" class="review-note"><strong>Menunggu review manual</strong><span>Komputasi selesai. Kualitas geometri dan kelengkapan ruang perlu diperiksa.</span></div>
+          <div class="output-toolbar"><div><button id="show-tour" class="text-button selected">Room tour</button><button id="show-plan" class="text-button">Denah 2D</button></div><a id="open-tour" href="#" target="_blank" rel="noopener">Buka HTML ↗</a></div>
+          <iframe id="tour-frame" title="Room tour ArchiCon" loading="lazy" allow="fullscreen" hidden></iframe>
+          <div id="plan-grid" class="plan-grid" hidden></div>
+          <div class="downloads-heading"><h3>File hasil</h3><span id="delivery-path" class="helper"></span></div><div id="download-list" class="download-list"></div>
+          <div class="footnote"><span>Kalibrasi ukuran</span><p>Gunakan fitur kalibrasi di room tour dengan ukuran nyata yang diketahui. Denah adalah estimasi; gap kamera dan permukaan yang tidak terlihat tetap perlu direview.</p></div>
+        </div>
+      </section>
+      <footer class="workspace-footer"><span>ArchiCon</span><span>Capture. Reconstruct. Explore.</span></footer>
+    </main>
+  </div>
+</body>
+</html>

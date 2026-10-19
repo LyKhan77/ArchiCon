@@ -1,0 +1,33 @@
+schema_version: 1
+cache_alias_on_server: models/huggingface
+verified_at_utc: '2026-10-14T02:31:47Z'
+verification_scope: file_presence_and_size_only
+models:
+  da3_large_legacy:
+    model_id: depth-anything/DA3-LARGE
+    revision: c54c26b16ec04d218e8d584ecf4bce082a9fcc20
+    cache_directory: models--depth-anything--DA3-LARGE
+    weights_bytes: 1643843860
+    role: historical_baseline_and_initial_pilot
+    license: CC-BY-NC-4.0
+  da3_metric_large:
+    model_id: depth-anything/DA3METRIC-LARGE
+    revision: 4010e39f3634a45bc60553321fb49fb760bd594e
+    cache_directory: models--depth-anything--DA3METRIC-LARGE
+    weights_bytes: 1336734448
+    role: metric_scale_candidate
+    license: Apache-2.0
+  da3_nested_1_1:
+    model_id: depth-anything/DA3NESTED-GIANT-LARGE-1.1
+    revision: b2359bdf726fb44ef62acca04d629dcf158053e7
+    cache_directory: models--depth-anything--DA3NESTED-GIANT-LARGE-1.1
+    weights_bytes: 6759558100
+    role: metric_multiview_candidate
+    license: CC-BY-NC-4.0
+  da3_base:
+    model_id: depth-anything/da3-base
+    revision: f4a6c9b3c95e41c82048423d3493a81ec3fa810e
+    cache_directory: models--depth-anything--da3-base
+    weights_bytes: 541518028
+    role: permissive_small_baseline
+    license: Apache-2.0
