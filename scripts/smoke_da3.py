@@ -53,8 +53,9 @@ def fresh_resource_guard(run, config, filename):
     write_json(run / filename, resources)
     if not resources['resource_ready']:
         raise ValueError('; '.join(resources['errors']))
-    if resources['selected_gpu']['index'] != 0:
-        raise ValueError('Smoke is restricted to physical GPU 0; GPU 1 must never be visible')
+    # The selected physical device may have any host index.  The resource gate
+    # pins CUDA_VISIBLE_DEVICES to its UUID, so it is exposed as logical cuda:0
+    # inside this process while every other GPU remains hidden.
     os.environ.update(resources['launch_environment'])
     return resources
 

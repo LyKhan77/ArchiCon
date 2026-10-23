@@ -2,6 +2,13 @@
 
 Completed changes are recorded here. Versions describe source checkpoints; private reconstruction products keep their independent `vNNN` delivery versions.
 
+## [Unreleased]
+
+### Fixed
+
+- DA3 smoke/full-depth resource isolation now accepts the configured GPU by UUID regardless of its host index. The selected device remains the only visible CUDA device and is addressed as logical `cuda:0`.
+- Added regression coverage for a selected physical GPU at index 1.
+
 ## [0.1.0] — 2026-10-19
 
 First source checkpoint of ArchiCon. The working reconstruction/dashboard/viewer implementation was validated during 14–16 October 2026; this checkpoint adds repository guidance and publication hygiene.
