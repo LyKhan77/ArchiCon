@@ -8,6 +8,7 @@ Completed changes are recorded here. Versions describe source checkpoints; priva
 
 - The default room-tour profile now samples original video frames adaptively: base 2 FPS and up to 4 FPS in high-motion intervals, with sequential camera matching at overlap 32. Loop closure is optional and requires a local vocabulary tree for offline execution.
 - Audit reports persist motion metrics and sampling settings so higher-density frame selection remains traceable and bounded.
+- The default motion threshold is calibrated to the recorded iPhone profile at 0.03; it remains configurable per job because motion scores depend on resolution and scene content.
 
 ### Fixed
 

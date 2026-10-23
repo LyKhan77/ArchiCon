@@ -245,7 +245,7 @@ def audit_video(video: Path, run_dir: Path, target_fps: float = 2.0, max_keyfram
                 review_longest_edge: int = 512, split_seed: int = 7, validation_fraction: float = 0.2,
                 expected_sha256: str | None = None, threads: int = 4,
                 sampling_mode: str = "uniform", adaptive_target_fps: float | None = None,
-                motion_threshold: float = 0.08) -> dict:
+                motion_threshold: float = 0.03) -> dict:
     video, run = Path(video).resolve(), Path(run_dir)
     if not math.isfinite(target_fps) or target_fps <= 0 or max_keyframes < 2 or threads < 1:
         raise ValueError("Invalid audit parameters")

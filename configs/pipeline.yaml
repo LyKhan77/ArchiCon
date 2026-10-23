@@ -4,7 +4,7 @@ processing:
   keyframe_target_fps: 2
   sampling_mode: adaptive
   adaptive_target_fps: 4
-  motion_threshold: 0.08
+  motion_threshold: 0.03
   matching: sequential
   overlap: 32
   loop_detection: false

@@ -116,7 +116,7 @@ def camera_matching_mode(processing,frame_count):
 
 
 def capture_config(video, digest, duration, fps=2.0, *, sampling_mode='uniform',
-                   adaptive_target_fps=None, motion_threshold=.08):
+                   adaptive_target_fps=None, motion_threshold=.03):
     duration, fps = float(duration), float(fps)
     if not all(math.isfinite(v) and v > 0 for v in (duration, fps)) or fps > 10:
         raise ValueError('Positive duration and target FPS <= 10 required')
@@ -418,7 +418,7 @@ def run_server(root, job_dir, job, runner):
             job['input_video'], job['input_sha256'], duration, processing.get('target_fps', 2),
             sampling_mode=processing.get('sampling_mode', 'uniform'),
             adaptive_target_fps=processing.get('adaptive_target_fps'),
-            motion_threshold=processing.get('motion_threshold', .08)))
+            motion_threshold=processing.get('motion_threshold', .03)))
         params = dict(capture=str(capture.relative_to(root)), threads=4)
         audit = runner.run('S02_audit', [video, capture], params, stage_command(root, 'audit', **params),
                            expected=('frame_manifest.json', 'audit_report.json'), **common)
