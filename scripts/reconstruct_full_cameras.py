@@ -74,6 +74,7 @@ def run_full(root, run, args):
               'matching_policy': {'mode': args.matching,
                   'overlap': args.overlap if args.matching == 'sequential' else None,
                   'quadratic_overlap': False, 'loop_detection': args.loop_detection, 'device': 'cpu',
+                  'vocab_tree_path': str(Path(args.vocab_tree_path).resolve()) if args.vocab_tree_path else None,
                   'num_threads': args.threads},
               'evaluation_scope': 'All audit splits used as production input; no unbiased held-out evaluation',
               'nvs_metrics': 'unavailable; production input includes original audit validation images'}
@@ -111,6 +112,13 @@ def run_full(root, run, args):
         pairing.overlap, pairing.num_threads = args.overlap, args.threads
         pairing.quadratic_overlap = False
         pairing.loop_detection = args.loop_detection
+        if args.loop_detection:
+            if not args.vocab_tree_path:
+                raise ValueError('Loop detection requires a local --vocab-tree-path; offline download is disabled')
+            vocab_tree = Path(args.vocab_tree_path).resolve()
+            if not vocab_tree.is_file():
+                raise ValueError(f'Loop detection vocabulary tree is missing: {vocab_tree}')
+            pairing.vocab_tree_path = str(vocab_tree)
         progress(run, f'CPU sequential matching: overlap={args.overlap}; loop closure={args.loop_detection}')
         p.match_sequential(database, matching_options=matching, pairing_options=pairing, device=p.Device.cpu)
     else:
@@ -217,6 +225,7 @@ def main(argv=None):
     parser.add_argument('--matching', choices=['exhaustive', 'sequential'], default='exhaustive')
     parser.add_argument('--overlap', type=int, default=16)
     parser.add_argument('--loop-detection', action='store_true')
+    parser.add_argument('--vocab-tree-path')
     args = parser.parse_args(argv)
     try:
         run = create_run_dir(ROOT.resolve(), args.run_id)

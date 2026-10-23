@@ -155,6 +155,8 @@ def stage_command(root, stage, **params):
     runtime, script = scripts[stage]
     command = [str(root / runtime / 'bin/python'), str(root / 'scripts' / script), '--run-id', '@RUN_ID@']
     for name, value in params.items():
+        if value is None:
+            continue
         if isinstance(value, bool):
             if value: command.append('--' + name.replace('_', '-'))
         else:
@@ -430,6 +432,7 @@ def run_server(root, job_dir, job, runner):
                       matching=camera_matching_mode(processing,len(_json(audit/'frame_manifest.json')['frames'])),
                       overlap=processing.get('overlap', 16),
                       loop_detection=processing.get('loop_detection', False),
+                      vocab_tree_path=processing.get('vocab_tree_path'),
                       max_image_size=processing.get('max_image_size', 960), max_features=processing.get('max_features', 4096))
         camera = runner.run('S03_camera', [audit, root / config], params, stage_command(root, 'camera', **params),
                             expected=('report.json', 'manifest.json'), **common)

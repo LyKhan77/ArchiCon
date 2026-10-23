@@ -58,7 +58,7 @@ Full-video entrypoints:
 | Entrypoint | Kontrak |
 |---|---|
 | `reconstruct_full_cameras.py --audit-run AUDIT --run-id NAME` | Semua audited frames, source split sebagai metadata produksi; preserve separate model worlds dan missing IDs |
-| `... --matching sequential --overlap 32 --loop-detection --max-image-size 1600 --max-features 8192` | Matching temporal bounded dengan loop closure; tidak otomatis menyambungkan area tanpa overlap visual |
+| `... --matching sequential --overlap 32 --loop-detection --vocab-tree-path PATH --max-image-size 1600 --max-features 8192` | Matching temporal bounded dengan loop closure memakai vocabulary tree lokal; tidak mengunduh asset atau menyambungkan area tanpa overlap visual |
 | `run_full_depth.py --camera-component outputs/RUN/components/ID --run-id NAME` | Variable-N component, max16view/stride12, endpoint coverage, actual alignment capture; --max-windows partial bukan complete |
 | `build_full_surface.py --depth-run DEPTH --camera-component PATH --annotations FILE --run-id NAME` | Current-grid semantic boxes + spatial/MV filtering, coverage/strict comparison, shared unit-relative parameters; exclusive-create checkpoint |
 | `render_full_surface.py --surface-run SURFACE --run-id NAME` | Seluruh accepted component poses dirender sebagai triangle, per-frame PNG,2fps MP4,overview dan display-only GLB |

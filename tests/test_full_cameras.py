@@ -229,6 +229,7 @@ class FullCameraCliTests(unittest.TestCase):
         undistorted = {}
         calls = []
         matching_calls = []
+        expected_vocab_tree = None
         def undistort(output, primary, images, **kwargs):
             output = Path(output)
             (output / 'images').mkdir(parents=True)
@@ -267,6 +268,8 @@ class FullCameraCliTests(unittest.TestCase):
             self.assertEqual(pairing.num_threads, 4)
             self.assertFalse(pairing.quadratic_overlap)
             self.assertEqual(pairing.loop_detection, loop_detection)
+            if loop_detection:
+                self.assertEqual(pairing.vocab_tree_path, expected_vocab_tree)
         def mapping(*args, **kwargs):
             self.assertFalse(kwargs['options'].ba_use_gpu)
             self.assertEqual(kwargs['options'].ba_global_backend, 'ceres')
@@ -278,6 +281,11 @@ class FullCameraCliTests(unittest.TestCase):
             audit, run, args = self.setup_run(root)
             args.matching = matching_mode
             args.loop_detection = loop_detection
+            args.vocab_tree_path = None
+            if loop_detection:
+                args.vocab_tree_path = str(root / 'vocab_tree.bin')
+                Path(args.vocab_tree_path).write_bytes(b'vocab-tree-fixture')
+                expected_vocab_tree = str(Path(args.vocab_tree_path).resolve())
             if matching_mode == 'sequential':
                 args.max_image_size, args.max_features = 1600, 8192
             original_manifest = (audit / 'frame_manifest.json').read_bytes()
