@@ -115,14 +115,28 @@ def camera_matching_mode(processing,frame_count):
     return ('exhaustive' if frame_count<=budget else 'sequential') if mode=='auto' else mode
 
 
-def capture_config(video, digest, duration, fps=2.0):
+def capture_config(video, digest, duration, fps=2.0, *, sampling_mode='uniform',
+                   adaptive_target_fps=None, motion_threshold=.08):
     duration, fps = float(duration), float(fps)
     if not all(math.isfinite(v) and v > 0 for v in (duration, fps)) or fps > 10:
         raise ValueError('Positive duration and target FPS <= 10 required')
+    if sampling_mode not in ('uniform', 'adaptive'):
+        raise ValueError('Sampling mode must be uniform or adaptive')
+    if adaptive_target_fps is not None:
+        adaptive_target_fps = float(adaptive_target_fps)
+        if not math.isfinite(adaptive_target_fps) or adaptive_target_fps < fps or adaptive_target_fps > 10:
+            raise ValueError('Adaptive target FPS must be finite, >= base FPS and <= 10')
+    motion_threshold = float(motion_threshold)
+    if not math.isfinite(motion_threshold) or not 0 <= motion_threshold <= 1:
+        raise ValueError('Motion threshold must be finite and in [0, 1]')
     return dict(schema_version=1, input_video=str(video),
                 verified_metadata=dict(sha256=digest, duration_seconds=duration),
-                sampling=dict(target_fps=fps, max_keyframes=math.ceil(duration * fps) + 4,
-                              selection='sharpest_per_temporal_window', preserve_low_texture_continuity=True))
+                sampling=dict(target_fps=fps, max_keyframes=math.ceil(duration * (adaptive_target_fps or fps)) + 4,
+                              mode=sampling_mode, adaptive_target_fps=adaptive_target_fps,
+                              motion_threshold=motion_threshold,
+                              selection=('sharpest_per_motion_adaptive_window' if sampling_mode == 'adaptive'
+                                         else 'sharpest_per_temporal_window'),
+                              preserve_low_texture_continuity=True))
 
 
 def annotation_config(frames):
@@ -398,7 +412,11 @@ def run_server(root, job_dir, job, runner):
                                 capture_output=True, text=True, check=True, timeout=60)
         duration = float(json.loads(result.stdout)['format']['duration'])
         capture = job_asset(root,job_dir,'config','capture.json')
-        _write(capture, capture_config(job['input_video'], job['input_sha256'], duration, processing.get('target_fps', 2)))
+        _write(capture, capture_config(
+            job['input_video'], job['input_sha256'], duration, processing.get('target_fps', 2),
+            sampling_mode=processing.get('sampling_mode', 'uniform'),
+            adaptive_target_fps=processing.get('adaptive_target_fps'),
+            motion_threshold=processing.get('motion_threshold', .08)))
         params = dict(capture=str(capture.relative_to(root)), threads=4)
         audit = runner.run('S02_audit', [video, capture], params, stage_command(root, 'audit', **params),
                            expected=('frame_manifest.json', 'audit_report.json'), **common)
@@ -409,7 +427,9 @@ def run_server(root, job_dir, job, runner):
         camera = _run(root, reuse['camera_run'])
     else:
         params = dict(audit_run=audit.name, config=config, threads=4,
-                      matching=camera_matching_mode(processing,len(_json(audit/'frame_manifest.json')['frames'])), overlap=processing.get('overlap', 16),
+                      matching=camera_matching_mode(processing,len(_json(audit/'frame_manifest.json')['frames'])),
+                      overlap=processing.get('overlap', 16),
+                      loop_detection=processing.get('loop_detection', False),
                       max_image_size=processing.get('max_image_size', 960), max_features=processing.get('max_features', 4096))
         camera = runner.run('S03_camera', [audit, root / config], params, stage_command(root, 'camera', **params),
                             expected=('report.json', 'manifest.json'), **common)

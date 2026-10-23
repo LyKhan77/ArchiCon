@@ -13,7 +13,7 @@ Jalankan dari root checkout dengan `.venv/bin/python`:
 | Entrypoint | Hasil |
 |---|---|
 | `preflight.py --config configs/paths.server.yaml --run-id NAME` | Inventory, source provenance, resource gate, validasi file cache; tanpa inference |
-| `audit_video.py --run-id NAME --threads 4` | Decoder PTS, rotasi, sharpness/exposure, 2 fps keyframe, split temporal, contact sheets |
+| `audit_video.py --run-id NAME --threads 4` | Decoder PTS, rotasi, sharpness/exposure, uniform/adaptive keyframe asli, split temporal, contact sheets |
 | `import_legacy.py --run-id NAME` | Manifest dan review cached DA3; timestamp perkiraan, visual-only |
 | `localize_validation.py --audit-run AUDIT --camera-run CAMERA --run-id NAME` | Query-only PnP delapan validation view; fixed map/K, no BA; OPENCV remap pada grid train |
 | `smoke_da3.py --camera-run CAMERA --run-id NAME` | Empat train view DA3-LARGE lokal/offline; relative Z-depth, camera contract, peak memory |
@@ -58,7 +58,7 @@ Full-video entrypoints:
 | Entrypoint | Kontrak |
 |---|---|
 | `reconstruct_full_cameras.py --audit-run AUDIT --run-id NAME` | Semua audited frames, source split sebagai metadata produksi; preserve separate model worlds dan missing IDs |
-| `... --matching sequential --overlap 16 --max-image-size 1600 --max-features 8192` | Percobaan matching temporal bounded; tidak otomatis lebih baik daripada exhaustive |
+| `... --matching sequential --overlap 32 --loop-detection --max-image-size 1600 --max-features 8192` | Matching temporal bounded dengan loop closure; tidak otomatis menyambungkan area tanpa overlap visual |
 | `run_full_depth.py --camera-component outputs/RUN/components/ID --run-id NAME` | Variable-N component, max16view/stride12, endpoint coverage, actual alignment capture; --max-windows partial bukan complete |
 | `build_full_surface.py --depth-run DEPTH --camera-component PATH --annotations FILE --run-id NAME` | Current-grid semantic boxes + spatial/MV filtering, coverage/strict comparison, shared unit-relative parameters; exclusive-create checkpoint |
 | `render_full_surface.py --surface-run SURFACE --run-id NAME` | Seluruh accepted component poses dirender sebagai triangle, per-frame PNG,2fps MP4,overview dan display-only GLB |

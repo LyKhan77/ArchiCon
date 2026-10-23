@@ -4,6 +4,11 @@ Completed changes are recorded here. Versions describe source checkpoints; priva
 
 ## [Unreleased]
 
+### Changed
+
+- The default room-tour profile now samples original video frames adaptively: base 2 FPS and up to 4 FPS in high-motion intervals, with sequential camera matching at overlap 32 and loop closure enabled.
+- Audit reports persist motion metrics and sampling settings so higher-density frame selection remains traceable and bounded.
+
 ### Fixed
 
 - DA3 smoke/full-depth resource isolation now accepts the configured GPU by UUID regardless of its host index. The selected device remains the only visible CUDA device and is addressed as logical `cuda:0`.

@@ -73,7 +73,7 @@ def run_full(root, run, args):
               'production_uses_original_validation': True, 'reconstruction_role': 'production',
               'matching_policy': {'mode': args.matching,
                   'overlap': args.overlap if args.matching == 'sequential' else None,
-                  'quadratic_overlap': False, 'loop_detection': False, 'device': 'cpu',
+                  'quadratic_overlap': False, 'loop_detection': args.loop_detection, 'device': 'cpu',
                   'num_threads': args.threads},
               'evaluation_scope': 'All audit splits used as production input; no unbiased held-out evaluation',
               'nvs_metrics': 'unavailable; production input includes original audit validation images'}
@@ -109,8 +109,9 @@ def run_full(root, run, args):
     if args.matching == 'sequential':
         pairing = p.SequentialPairingOptions()
         pairing.overlap, pairing.num_threads = args.overlap, args.threads
-        pairing.quadratic_overlap, pairing.loop_detection = False, False
-        progress(run, f'CPU sequential matching: overlap={args.overlap}; quadratic and loop detection disabled')
+        pairing.quadratic_overlap = False
+        pairing.loop_detection = args.loop_detection
+        progress(run, f'CPU sequential matching: overlap={args.overlap}; loop closure={args.loop_detection}')
         p.match_sequential(database, matching_options=matching, pairing_options=pairing, device=p.Device.cpu)
     else:
         progress(run, f'CPU exhaustive matching: {len(frames) * (len(frames) - 1) // 2} image pairs')
@@ -215,6 +216,7 @@ def main(argv=None):
     parser.add_argument('--max-features', type=int, default=4096)
     parser.add_argument('--matching', choices=['exhaustive', 'sequential'], default='exhaustive')
     parser.add_argument('--overlap', type=int, default=16)
+    parser.add_argument('--loop-detection', action='store_true')
     args = parser.parse_args(argv)
     try:
         run = create_run_dir(ROOT.resolve(), args.run_id)

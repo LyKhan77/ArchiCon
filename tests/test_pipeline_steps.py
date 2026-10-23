@@ -70,6 +70,14 @@ class PipelineStepsTests(unittest.TestCase):
         self.assertEqual(capture['input_video'], 'raw_videos/long.mov')
         with self.assertRaises(ValueError): steps.capture_config('video', 'sha', float('nan'), 2)
 
+    def test_capture_config_records_adaptive_sampling(self):
+        capture = steps.capture_config('raw_videos/fast.mov', 'sha', 10, 2,
+                                       sampling_mode='adaptive', adaptive_target_fps=4,
+                                       motion_threshold=.08)
+        self.assertEqual(capture['sampling']['mode'], 'adaptive')
+        self.assertEqual(capture['sampling']['adaptive_target_fps'], 4)
+        self.assertEqual(capture['sampling']['motion_threshold'], .08)
+
     def test_select_components_uses_quality_and_unique_frame_coverage(self):
         with TemporaryDirectory() as tmp:
             root = Path(tmp)

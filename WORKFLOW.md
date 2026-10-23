@@ -84,8 +84,8 @@ flowchart TD
 | Stage | Kontrak utama |
 |---|---|
 | S00/S01 | Input SHA/config resolved; model/runtime/resource gate sebelum komputasi |
-| S02 | Full-timeline keyframe, source PTS, hash RGB, audit dan contact sheet; default 2fps tidak memotong akhir video |
-| S03 | Sparse components, K/pose, undistorted RGB; outlier ditolak/dikarantina, gap tetap dicatat |
+| S02 | Full-timeline keyframe, source PTS, hash RGB, audit dan contact sheet; default base 2fps dengan adaptive 4fps pada interval gerak tinggi, tanpa frame sintetis |
+| S03 | Sparse components, K/pose, undistorted RGB; sequential overlap/loop closure dapat dipakai untuk menjembatani lintasan, outlier tetap ditolak/dikarantina |
 | S04 | Mask sesuai frame/grid/hash. Kaca/manual kosong tetap unreviewed; tidak memakai polygon capture lama |
 | S05 | DA3 conditioned per komponen/window; frame/K/pose konsisten, optical-axis Z, unit map relatif |
 | S06 | Confidence/spatial/multi-view/person filtering, TSDF, GLB/PLY valid |
@@ -98,7 +98,7 @@ flowchart TD
 
 Komponen yang seluruh frame-nya duplikat komponen lebih besar dapat dilewati; overlap sebagian dipertahankan. Coverage menghitung union ID frame. Kegagalan data per komponen dilaporkan, komponen lain yang valid tetap dipaketkan. Error runtime/model/resource tidak disamarkan sebagai kegagalan geometri.
 
-Default matcher kamera `auto` memakai exhaustive untuk≤400keyframe yang benar-benar diaudit (maks79.800pasangan); di atasnya sequential dengan overlap16. Tujuannya membatasi biaya kuadratik sambil memberi lebih banyak pasangan penghubung pada video pendek. Mode dapat dipaksa lewat `processing.matching`; ini bukan jaminan semua video akan berhasil. Klip dinding polos dapat tetap gagal initial pair tanpa variasi geometri/kalibrasi yang cukup.
+Profil room-tour default memakai adaptive sampling (base 2fps, high-motion 4fps), sequential matching overlap32 dan loop closure. `auto` tetap memakai exhaustive untuk≤400keyframe yang benar-benar diaudit (maks79.800pasangan); di atasnya sequential dengan overlap16. Adaptive sampling hanya memilih frame asli dan menaikkan kepadatan di interval gerak tinggi; tidak memperbaiki motion blur. Mode, overlap dan loop closure dapat diubah lewat `processing`; ini bukan jaminan semua video akan tersambung. Klip dinding polos dapat tetap gagal initial pair tanpa variasi geometri/kalibrasi yang cukup.
 
 Jika semua komponen gagal, job failed dengan diagnosis di worker/stage log dan `component-failures.json` bila tersedia. Belum ada delivery mesh/tour atau paket review visual lengkap untuk kondisi tersebut. Tidak membuat geometri dummy.
 
@@ -106,7 +106,7 @@ Jika semua komponen gagal, job failed dengan diagnosis di worker/stage log dan `
 
 | Batas | Kebijakan |
 |---|---|
-| GPU | Hanya UUID GPU0 yang dikonfigurasi; GPU1 tidak digunakan |
+| GPU | Hanya satu UUID GPU yang dikonfigurasi pada machine profile; isolasi mengeksposnya sebagai logical `cuda:0` |
 | Gate inference | ≥14 GiB VRAM free, idle, tanpa compute process lain |
 | Gate host/disk | ≥8 GiB RAM available, ≥50 GiB disk free sebelum stage berat |
 | Runtime | Process-tree RSS ≤6 GiB, GPU process ≤14 GiB, allocator PyTorch ≤12 GiB |
