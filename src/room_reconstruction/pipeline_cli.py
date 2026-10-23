@@ -160,6 +160,9 @@ def process_server(root,job,*,detach=False):
     prepare_server(root,job)
     controller_progress(root,job,'processing')
     status=worker_state(job)
+    if status['execution_status']=='complete':
+        controller_progress(root,job,'downloading')
+        return obtain_bundle(root,job)
     if status['execution_status']!='running':
         start_worker(job);time.sleep(.5)
     if detach:return None

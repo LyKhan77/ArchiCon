@@ -5,11 +5,23 @@ import unittest
 import yaml
 from unittest.mock import patch
 
-from room_reconstruction.pipeline_cli import register_job,describe_plan,complete_job,apply_manual_review,main
+from room_reconstruction.pipeline_cli import (register_job, describe_plan, complete_job,
+                                              apply_manual_review, main, process_server)
 from room_reconstruction.pipeline_state import atomic_json,WaitingResources
 
 
 class PipelineCLITests(unittest.TestCase):
+    def test_process_server_downloads_completed_remote_bundle_without_restart(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve(); (root / 'outputs/jobs/job').mkdir(parents=True)
+            job = dict(job_id='job', transport={'mode':'local'}, delivery_root='end_product')
+            bundle = {'job_id':'job', 'status':'complete'}
+            with patch('room_reconstruction.pipeline_cli.prepare_server'), \
+                    patch('room_reconstruction.pipeline_cli.worker_state', return_value={'execution_status':'complete'}), \
+                    patch('room_reconstruction.pipeline_cli.start_worker', side_effect=AssertionError('worker restarted')), \
+                    patch('room_reconstruction.pipeline_cli.obtain_bundle', return_value=bundle):
+                self.assertEqual(process_server(root, job), bundle)
+
     def test_registration_is_capture_specific_without_historical_frame_constants(self):
         with TemporaryDirectory() as temporary:
             root=Path(temporary);(root/'configs').mkdir();(root/'raw_videos').mkdir()
