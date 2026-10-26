@@ -80,7 +80,7 @@ Sumber parameter: [configs/pipeline.yaml](../configs/pipeline.yaml), [pipeline_s
 
 Laptop menangani input, transfer, monitoring, HTML build, browser QA dan review. Server menangani komputasi audit/kamera/depth/geometri. Profil: paths.local.yaml (`../configs/paths.local.yaml`, lokal), paths.server.yaml (`../configs/paths.server.yaml`, lokal).
 
-Server yang telah diaudit memiliki dua RTX 5080; pipeline hanya memakai UUID GPU0 yang disimpan pada profil mesin privat, yang menjadi logical `cuda:0` setelah isolasi. GPU lain tidak dipilih. Audit/kamera/geometri berjalan pada CPU dengan CUDA disembunyikan.
+Server yang telah diaudit memiliki dua RTX 5080; pipeline hanya memakai satu UUID GPU yang diizinkan pada profil mesin privat, yang menjadi logical `cuda:0` setelah isolasi. Index fisik dapat berbeda; GPU lain tidak dipilih. Audit/kamera/geometri berjalan pada CPU dengan CUDA disembunyikan.
 
 | Guard saat ini | Batas |
 |---|---|

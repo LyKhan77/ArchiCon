@@ -88,7 +88,7 @@ Keputusan ditambahkan dalam versi baru tanpa mengubah byte produk yang direview.
 
 Laptop: registrasi, transfer, monitoring, HTML build dan browser QA. Server: audit, kamera, depth, fusion/render/export. Profil ada di `configs/paths.local.yaml`, `configs/paths.server.yaml` dan `configs/pipeline.yaml`.
 
-Hanya GPU0 yang dipilih melalui UUID. Gate saat ini: RAM available≥8GiB, disk free≥50GiB, GPU free≥14GiB dan idle; CPU4thread/2worker. Runtime/model server terpisah dan sudah dipin. Default matcher auto memakai exhaustive hingga400keyframe, sequential di atasnya. Ini bukan jaminan setiap rekaman dapat direkonstruksi.
+Hanya satu GPU yang diizinkan pada profil mesin, dipilih melalui UUID dan diekspos sebagai logical `cuda:0`. Gate saat ini: RAM available≥8GiB, disk free≥50GiB, GPU free≥14GiB dan idle; CPU4thread/2worker. Runtime/model server terpisah dan sudah dipin. Profil default memakai adaptive 2/4fps dan sequential overlap32; profil dense opsional memakai 4fps dan overlap64. Mode auto/exhaustive tetap tersedia. Ini bukan jaminan setiap rekaman dapat direkonstruksi.
 
 ## Dokumentasi dan arsip
 
