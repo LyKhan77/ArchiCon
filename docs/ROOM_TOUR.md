@@ -19,7 +19,7 @@ Hasil desain terbaru: lantai3_part1_1016_1525/v002 (`../end_product/lantai3_part
 
 Jumlah sudut rekaman pada header menghitung frame-ID unik lintas-komponen; jumlah kamera pada masing-masing komponen dapat beririsan. Bentang geometri tetap diberi satuan u sampai ada acuan nyata. Komponen lokal memiliki world independen; denah merupakan irisan geometri, belum denah arsitektur semantik, dan estimasi meter belum hasil survei.
 
-Pada job dengan S06G aktif dan alignment yang lolos, pilihan **Arsitektur gabungan · kandidat** muncul di awal daftar. Ini menampilkan satu world gabungan, dengan denah dan kamera yang ditransformasikan ke world root yang sama. Area lokal tetap tersedia sebagai referensi. World tanpa cukup bukti tidak dimasukkan; lihat `reports/global-alignment.json` dan daftar fallback. Lubang dan permukaan ganda masih mungkin ada. Bila status `no_alignment`, pilihan gabungan serta `mesh/architecture.glb` tidak dibuat. Hasil lama tidak berubah otomatis.
+Pada job dengan S06G aktif dan alignment yang lolos, pilihan **Arsitektur gabungan · kandidat** muncul di awal daftar. Ini menampilkan satu world gabungan, dengan denah dan kamera yang ditransformasikan ke world root yang sama. World yang sudah digabung tidak diduplikasi di sidebar; GLB lokal aslinya tetap tersedia di folder `mesh/`. Semua world fallback tetap ditampilkan. Jika world utama belum terhubung, grup lain yang terbukti tersambung dapat menjadi kandidat; ini tetap bagian bangunan, bukan seluruh bangunan. Lihat `reports/global-alignment.json` untuk membership/root dan fallback. Lubang dan permukaan ganda masih mungkin ada. Bila status `no_alignment`, pilihan gabungan serta `mesh/architecture.glb` tidak dibuat. Hasil lama tidak berubah otomatis.
 
 ## Implementasi dan bukti
 

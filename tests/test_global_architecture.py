@@ -13,13 +13,17 @@ from tests.test_alignment import cameras, transform
 
 @unittest.skipUnless(importlib.util.find_spec('trimesh'), 'Trimesh geometry runtime required')
 class GlobalArchitectureTests(unittest.TestCase):
-    def fixture(self, root, shared=True):
+    def fixture(self, root, shared=True, isolated_main=False):
         import trimesh
         points = np.random.default_rng(21).normal(size=(12, 3))
         similarity = transform()
         rows = []
-        for identifier, coords, display in [('main', np.eye(4), transform(1, -.6, (10, 0, -1))),
-                                             ('other', similarity, transform(1, .2, (-5, 2, 0)))]:
+        entries = [('main', np.eye(4), transform(1, -.6, (10, 0, -1))),
+                   ('other', similarity, transform(1, .2, (-5, 2, 0)))]
+        if isolated_main:
+            entries = [('a', entries[0][1], entries[0][2]), ('b', entries[1][1], entries[1][2]),
+                       ('main', entries[0][1], entries[0][2])]
+        for identifier, coords, display in entries:
             base = root / 'outputs' / identifier; (base / 'undistorted').mkdir(parents=True)
             local = trimesh.Trimesh(vertices=[[0, 0, 0], [1, 0, 0], [0, 1, 0]], faces=[[0, 1, 2]],
                                     vertex_colors=[[200, 50, 25, 255]] * 3, process=False)
@@ -27,7 +31,8 @@ class GlobalArchitectureTests(unittest.TestCase):
             mesh = base / 'room.glb'; local.export(mesh)
             camera = base / 'undistorted/cameras.json'
             camera.write_text(json.dumps(dict(pose_convention='OpenCV c2w; +x right, +y down, +z forward',
-                frames=cameras(points, coords, prefix='f' if shared or identifier == 'main' else 'x'))))
+                frames=cameras(points, coords, prefix=('isolated' if isolated_main and identifier == 'main'
+                                                       else 'f' if shared or identifier == 'main' else 'x')))))
             manifest = base / 'manifest.json'
             manifest.write_text(json.dumps(dict(stage='full_render', world_to_viewer=display.tolist(),
                 input_and_source_hashes={str(camera): sha256_file(camera)},
@@ -68,6 +73,19 @@ class GlobalArchitectureTests(unittest.TestCase):
             self.assertIsNone(report['component'])
             self.assertFalse((run / 'architecture.glb').exists())
             self.assertEqual(json.loads((run / 'alignment.json').read_text())['fallback_components'], ['other'])
+
+    def test_isolated_main_does_not_hide_a_validated_secondary_group(self):
+        with TemporaryDirectory() as temp:
+            root = Path(temp).resolve(); config = self.fixture(root, isolated_main=True)
+            run = root/'outputs/global'; run.mkdir()
+            report = global_architecture.build_architecture(root, run, config)
+            self.assertEqual(report['status'], 'aligned_partial')
+            self.assertEqual(report['aligned_components'], ['a', 'b'])
+            self.assertEqual(report['fallback_components'], ['main'])
+            evidence = json.loads((run/'alignment.json').read_text())
+            self.assertEqual(evidence['requested_root_component'], 'main')
+            self.assertEqual(evidence['root_component'], 'a')
+            self.assertEqual(evidence['root_selection'], 'largest_validated_connected_group')
 
     def test_rejects_changed_inputs_invalid_viewer_transform_and_escape(self):
         for fault in ('checksum', 'transform', 'escape', 'symlink'):

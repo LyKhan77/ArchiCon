@@ -61,6 +61,24 @@ def build_architecture(root, run, config, memory_guard=lambda: None):
             raise ValueError('Cameras do not match render provenance')
     root_id = config.get('root_component', 'main')
     alignment = build_alignment(tables, root_id)
+    alignment['requested_root_component'] = root_id
+    alignment['root_selection'] = 'requested_root'
+    if alignment['status'] == 'no_alignment' and not alignment['cycle_conflicts']:
+        # An isolated main world must not hide a separately validated connection.
+        # Keep main as fallback rather than assigning it an invented transform.
+        roots = sorted({edge[key] for edge in alignment['edges'] if edge['accepted']
+                        for key in ('source', 'target')})
+        candidates = [build_alignment(tables, key) for key in roots]
+        candidates = [item for item in candidates if item['status'] == 'aligned_partial']
+        if candidates:
+            def score(item):
+                ids = set().union(*({frame['frame_id'] for frame in tables[key]}
+                                     for key in item['aligned_components']))
+                return (-len(ids), -len(tables[item['root_component']]), item['root_component'])
+            alignment = min(candidates, key=score)
+            alignment['requested_root_component'] = root_id
+            alignment['root_selection'] = 'largest_validated_connected_group'
+            root_id = alignment['root_component']
     display = displays[root_id]; component = None; vertex_transforms = {}
     if alignment['status'] != 'no_alignment':
         import trimesh
@@ -102,6 +120,7 @@ def build_architecture(root, run, config, memory_guard=lambda: None):
             world_to_viewer=display.tolist(), input_and_source_hashes={str(camera.relative_to(root)): sha256_file(camera)},
             upstream_hashes=hashes, artifacts=[dict(file='architecture.glb', sha256=sha256_file(run / 'architecture.glb'))]))
         component = dict(id='architecture', name='Arsitektur gabungan · kandidat',
+                         source_component_ids=alignment['aligned_components'],
                          **{key: str((run / name).relative_to(root)) for key, name in
                             [('mesh', 'architecture.glb'), ('cameras', 'undistorted/cameras.json'),
                              ('render_manifest', 'render-manifest.json')]})
@@ -111,6 +130,7 @@ def build_architecture(root, run, config, memory_guard=lambda: None):
         if sha256_file(_file(root, name)) != digest:
             raise ValueError('Architecture inputs changed during processing')
     report = dict(stage='global_architecture', status=alignment['status'], component=component,
+                  root_component=root_id, requested_root_component=alignment['requested_root_component'],
                   aligned_components=alignment['aligned_components'], fallback_components=alignment['fallback_components'],
                   input_sha256=config['input_sha256'], scale_status='relative',
                   geometry_accuracy_validated=False, full_room_reconstruction_complete=False,

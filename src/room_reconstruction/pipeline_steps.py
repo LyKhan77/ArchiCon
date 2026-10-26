@@ -325,8 +325,17 @@ def _sample(values, count):
     return [values[round(i * (len(values) - 1) / (count - 1))] for i in range(count)] if count > 1 else values[:count]
 
 
+def _tour_components(components, global_component=None):
+    if not global_component:
+        return components
+    merged = set(global_component['source_component_ids'])
+    if len(merged) < 2 or not merged <= {row['id'] for row in components}:
+        raise ValueError('Global tour components must reference validated local worlds')
+    return [global_component] + [row for row in components if row['id'] not in merged]
+
+
 def _bundle_files(root, audit, tour, components, selected, global_component=None):
-    tour_components = ([global_component] if global_component else []) + components
+    tour_components = _tour_components(components, global_component)
     required = {p for p in _validate_tour(root, tour, tour_components) if not p.name.endswith("-sections.json")}
     required.update(tour / name for name in ("status.json", "manifest.json", "tour-data.json"))
     if (tour / "report.json").is_file(): required.add(tour / "report.json")
@@ -424,10 +433,13 @@ def _global_stage(root, job_dir, job, components, runner, common):
     if component:
         if component.get('id') != 'architecture' or len(report['aligned_components']) < 2:
             raise ValueError('Global architecture requires multiple validated worlds')
+        if set(component.get('source_component_ids', [])) != set(report['aligned_components']):
+            raise ValueError('Global mesh component membership differs from alignment report')
         for key in ('mesh', 'cameras', 'render_manifest'):
             if _local(root, component[key], outputs=True) not in paths:
                 raise ValueError('Architecture component artifact is not hash-bound')
     descriptor = dict(status=status, run_id=run.name, component=component,
+        root_component=report.get('root_component'),
         aligned_components=report['aligned_components'], fallback_components=report['fallback_components'],
         alignment=str((products / 'alignment.json').relative_to(root)))
     paths.extend([products / 'manifest.json', run / 'status.json', run / 'report.json'])
@@ -561,7 +573,7 @@ def run_server(root, job_dir, job, runner):
         tour = _run(root, reuse['tour_run'])
     else:
         tour_config = job_asset(root,job_dir,'config','tour-config.json')
-        tour_components = ([global_component] if global_component else []) + components
+        tour_components = _tour_components(components, global_component)
         config_data = _tour_config(job, tour_components, coverage)
         if global_info:
             config_data['global_architecture'] = global_info

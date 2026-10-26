@@ -40,6 +40,15 @@ def component(root, name, ids):
 
 
 class PipelineStepsTests(unittest.TestCase):
+    def test_global_tour_groups_connected_worlds_and_keeps_every_fallback(self):
+        rows = [dict(id=key) for key in ('main', 'a', 'b', 'c')]
+        global_component = dict(id='architecture', source_component_ids=['a', 'b'])
+        result = steps._tour_components(rows, global_component)
+        self.assertEqual([row['id'] for row in result], ['architecture', 'main', 'c'])
+        self.assertEqual([row['id'] for row in rows], ['main', 'a', 'b', 'c'])
+        with self.assertRaises(ValueError):
+            steps._tour_components(rows, dict(id='architecture', source_component_ids=['a', 'missing']))
+
     def test_global_stage_no_alignment_preserves_existing_tour_and_transfers_evidence(self):
         from room_reconstruction.global_architecture import build_architecture
         with TemporaryDirectory() as tmp:

@@ -12,6 +12,7 @@ Completed changes are recorded here. Versions describe source checkpoints; priva
 - Restored the exact original annotation SHA for the previous adaptive main surface after diagnosing a duplicate-worker overwrite; overwritten bytes were backed up. Final meshes/products were not rewritten.
 - Verification: 280 Python tests (277 passed, 3 backend-dependent skips) with real GLB fixtures using the pinned Trimesh 5.1.1 in temporary test dependencies; 7 JavaScript calibration tests passed. The actual no-alignment delivery passed offline/mobile browser QA; this does not establish reconstruction quality.
 - Added an optional dense CLI profile (4 FPS, overlap 64, SIFT 1600/8192). A CPU-only same-video benchmark registered 824/999 cameras versus 370/502 baseline, reduced accepted worlds from 18 to 16 and increased largest-world share from 15.7% to 28.7%. Surface quality remains a separate review; this profile does not fabricate frames or relax resource guards.
+- If the requested root is isolated, S06G can select the largest independently validated connected group and retain the original root as fallback. The tour groups merged worlds into one entry without dropping fallback views; original local meshes remain separate downloadable artifacts.
 
 ### Changed
 

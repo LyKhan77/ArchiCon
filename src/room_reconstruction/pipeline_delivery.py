@@ -49,7 +49,11 @@ def make_delivery(root,job_dir,bundle,*,delivery_root='end_product'):
         identifier=component['id']
         if '/' in identifier or '\\' in identifier or identifier in ('.','..'):raise ValueError('Unsafe component ID')
         _copy(workspace_path(root,component['mesh']),delivery/'mesh'/f'{identifier}.glb')
-        info=next(x for x in data['components'] if x['id']==identifier)
+        info=next((x for x in data['components'] if x['id']==identifier), None)
+        if info is None:
+            grouped = bundle.get('global_architecture', {}).get('aligned_components', [])
+            if identifier not in grouped: raise ValueError('Local component missing from tour and global group')
+            continue
         for key in ('svg_file',):
             name=info['floorplan'].get(key)
             if name and (export/name).is_file():_copy(workspace_path(export,name),delivery/'denah'/f'{identifier}.svg')
