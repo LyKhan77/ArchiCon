@@ -10,6 +10,8 @@ Profil mesin aktif di-ignore. Checkout baru menyalin `paths.local.example.yaml` 
 | `models.yaml` | Exact snapshot checkpoint yang ditemukan di cache server |
 | `pilot.yaml` | Rentang dipertahankan setelah audit pilot; parameter depth masih rencana |
 | `full_take.yaml` | Kondisi yang wajib dipenuhi sebelum pemrosesan full take |
+| `pipeline.yaml` | Profil E2E default: adaptive 2/4 fps, sequential overlap32, S06G dan review manual |
+| `pipeline.dense.yaml` | Profil E2E opsional: frame asli 4 fps, sequential overlap64, SIFT1600/8192; lebih lambat, bukan jaminan geometri lengkap |
 
 Loader YAML, resource gate, dan unique run ID sudah diterapkan pada entrypoint yang
 tersedia. Capture config digunakan audit; profile pilot/full take memuat rencana

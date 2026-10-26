@@ -41,6 +41,14 @@ rtk proxy .venv/bin/python scripts/run_pipeline.py resume --job-id rekaman_baru_
 
 `manual` adalah default dan satu-satunya mode review. `run` membuat job baru; ID yang sudah ada ditolak. `resume` melanjutkan job itu. `--detach` melepas controller setelah worker server dimulai; gunakan `resume` untuk mengambil hasil dan packaging. Putus SSH/laptop tidak menghentikan worker. Lock mencegah dua controller/job yang sama.
 
+Profil dense opsional memilih frame asli 4 fps penuh, SIFT longest-edge1600/max8192 dan sequential overlap64, dengan guard resource yang sama. Ini menambah waktu komputasi; tidak memperbaiki blur atau mengisi geometri yang tidak terlihat. Gunakan ID baru:
+
+```bash
+rtk proxy .venv/bin/python scripts/run_pipeline.py run --input raw_videos/rekaman_baru.MOV --job-id rekaman_dense_001 --pipeline-config configs/pipeline.dense.yaml --review-agent manual
+```
+
+Dashboard tetap memakai profil default; contoh di atas adalah pemilihan profil melalui CLI.
+
 Video harus selesai ditulis/disalin sebelum `run`. Jika byte video berubah setelah registrasi, checksum gate menghentikan job; gunakan input final dan ID baru.
 
 Default mesin: `configs/paths.server.yaml`; SSH: `configs/paths.local.yaml`. `--ssh-target user@host` mengganti target. `--local-worker` membutuhkan seluruh runtime/model pada mesin tersebut, bukan jalur normal laptop ini.
