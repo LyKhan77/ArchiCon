@@ -4,6 +4,8 @@ Pipeline untuk video iPhone/ruangan: kamera COLMAP → DA3 depth → filtering/T
 
 Review tetap **manual**. Script menyiapkan output dan QA lalu berhenti; tidak memanggil agent/LLM atau layanan review otomatis. Dimensi memakai unit relatif sampai ada pengukuran nyata.
 
+Profil CLI opsional `--pipeline-config configs/pipeline.dense.yaml` memakai frame asli 4 fps dan matching lebih rapat. S06G dapat menghasilkan kandidat mesh/denah/HTML gabungan untuk area yang alignment kameranya lolos validasi; area lain tetap fallback. Ini belum jaminan rekonstruksi seluruh bangunan. [Alur dan batas](WORKFLOW.md).
+
 Checkpoint source: [CHANGELOG.md](CHANGELOG.md). Untuk checkout baru, ikuti [SETUP](docs/SETUP.md); profil mesin aktif, media/model, hasil rekonstruksi dan rencana kerja tidak disertakan Git. Panduan kontribusi dan batas operasi: [AGENTS.md](AGENTS.md).
 
 ## Dashboard web

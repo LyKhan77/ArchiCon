@@ -4,11 +4,19 @@
 
 Branch `feature/global-architecture-alignment` menambahkan S06G setelah render komponen. Shared-frame camera centers dipasang dengan Umeyama Sim(3), lalu diperiksa dengan frame validasi terpisah, orientasi, conditioning dan cycle. GLB memakai `root_viewer × component_to_root × inverse(component_viewer)`; fixture memeriksa koordinat dan warna pada GLB asli. Kandidat gabungan hanya memuat world yang terhubung ke root; tahap ini belum global TSDF atau hole filling.
 
+Kandidat terbaru `lantai3_aligned_1026/v001` selesai dari rekaman yang sama: 824/999 keyframe processed, 175 gap, satu grup gabungan (`component_001` + `component_003`) dan 10 world fallback. World utama belum tersambung; S06G memilih grup lain yang lolos validasi, tanpa memaksa posisi world utama. Dua area memakai 20 shared cameras: 14 fitting dan 6 validasi. Validation center max 0,0547% bentang lintasan bersama dan orientation max 1,615°. Ini konsistensi kamera, bukan akurasi meter/surface ground truth.
+
+Delivery membawa `mesh/architecture.glb`, denah gabungan dan HTML offline dengan 11 pilihan. Semua 824 frame-ID tetap terwakili, dan 12 GLB lokal identik byte dengan kandidat dense sebelumnya. Sebanyak 41 artefak produk diverifikasi SHA/size; browser QA offline/mobile lulus tanpa error. Review tetap pending/unassessed; inspeksi manual source/render world utama masih menemukan bidang putih/floaters dan lubang, termasuk sekitar 215–224 detik. **Full-building reconstruction belum tercapai.**
+
+Benchmark kamera CPU-only sudah selesai: baseline 370/502 keyframe, 18 accepted maps, largest map 79/502 (15,7%); dense 824/999, 16 accepted maps, largest map 287/999 (28,7%). Pipeline memilih 12 world lokal yang menambah coverage, lalu dua digabung sehingga HTML memiliki satu grup + 10 fallback. Reuse seluruh depth/mesh untuk tahap grouping terakhir; tidak ada inference ulang pada `lantai3_aligned_1026`. Profil opt-in yang sama disimpan pada `configs/pipeline.dense.yaml`.
+
+Regresi terakhir connected-group: 282 tes Python, 279 lulus/3 skip; 12 tes alignment/GLB juga lulus di runtime geometri server yang dipin. Tujuh tes JS kalibrasi sebelumnya tetap berlaku untuk kode JS yang tidak berubah. Jalur positif GLB → denah → HTML juga diperiksa dengan fixture sintetis dan QA browser offline/mobile.
+
 Uji reuse nyata `lantai3_global_1026` selesai tanpa inference baru: 370/502 frame, 17 komponen, tanpa kegagalan komponen, browser QA offline/mobile lulus. Hasil alignment `no_alignment`: tidak ada shared frame-ID pada 17 world yang masuk delivery. Tidak ada `architecture.glb` dummy. Laporan baru: `end_product/lantai3_global_1026/v001/reports/global-alignment.json` (privat/lokal). Hasil ini belum perbaikan visual atau full-building reconstruction; review pending, skala relatif.
 
 Reuse sempat menolak world utama karena konfigurasi anotasi ditimpa worker duplikat pada sesi sebelumnya. Byte asli berhasil direkonstruksi dan dicocokkan tepat dengan SHA pada manifest surface sebelum dipulihkan. Byte yang berubah dibackup; mesh dan delivery final lama tidak diubah.
 
-Regresi lokal: 280 tes Python dijalankan, 277 lulus dan 3 skip backend; termasuk tes GLB nyata menggunakan pin Trimesh 5.1.1 di direktori dependency tes temporer, tanpa mengubah environment proyek. Tujuh tes JavaScript kalibrasi lulus. Uji kamera CPU `lantai3_dense_camera_1026` memakai frame asli 4 fps, sequential overlap64, SIFT longest-edge1600/max8192features; hasilnya perlu dibandingkan sebelum depth ulang.
+Regresi integrasi awal: 280 tes Python dijalankan, 277 lulus dan 3 skip backend; termasuk tes GLB nyata menggunakan pin Trimesh 5.1.1 di direktori dependency tes temporer, tanpa mengubah environment proyek. Tujuh tes JavaScript kalibrasi lulus. Uji kamera CPU `lantai3_dense_camera_1026` memakai frame asli 4 fps, sequential overlap64, SIFT longest-edge1600/max8192features; perbandingan dan kandidat hasilnya dicatat di atas.
 
 ## Riwayat sebelum 26 Oktober 2026
 

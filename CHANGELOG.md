@@ -13,6 +13,8 @@ Completed changes are recorded here. Versions describe source checkpoints; priva
 - Verification: 280 Python tests (277 passed, 3 backend-dependent skips) with real GLB fixtures using the pinned Trimesh 5.1.1 in temporary test dependencies; 7 JavaScript calibration tests passed. The actual no-alignment delivery passed offline/mobile browser QA; this does not establish reconstruction quality.
 - Added an optional dense CLI profile (4 FPS, overlap 64, SIFT 1600/8192). A CPU-only same-video benchmark registered 824/999 cameras versus 370/502 baseline, reduced accepted worlds from 18 to 16 and increased largest-world share from 15.7% to 28.7%. Surface quality remains a separate review; this profile does not fabricate frames or relax resource guards.
 - If the requested root is isolated, S06G can select the largest independently validated connected group and retain the original root as fallback. The tour groups merged worlds into one entry without dropping fallback views; original local meshes remain separate downloadable artifacts.
+- Real connected-group validation completed: 824/999 processed frames, two worlds merged using 20 shared cameras (6 held out), 10 fallback worlds, all 824 viewpoint IDs preserved and all 12 local meshes byte-identical to the prior candidate. Architecture GLB/floorplan/HTML and offline/mobile QA passed. Quality remains pending/unassessed: floating/stretched surfaces and holes persist, and the whole building is not connected.
+- Final connected-group regression: 282 Python tests (279 passed, 3 backend-dependent skips), plus 12 alignment/GLB tests in the pinned server geometry runtime. Initial 7 JavaScript calibration tests and positive synthetic HTML QA also passed.
 
 ### Changed
 

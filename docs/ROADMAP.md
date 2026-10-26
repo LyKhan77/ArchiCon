@@ -62,7 +62,8 @@ Root PRD/ROADMAP/PROGRESS adalah pointer kompatibilitas. Hasil eksperimen lama d
 ## 5. Prioritas setelah uji video baru
 
 - [x] Implementasikan S06G dan jalankan reuse hasil `lantai3_part2` tanpa inference baru. Uji nyata menghasilkan `no_alignment`: 17 world delivery tidak mempunyai shared frame-ID. Bukti lengkap di laporan delivery baru; bukan penerimaan kualitas.
-- [ ] Bandingkan kamera 4 fps penuh, overlap 64, resolusi SIFT 1600/8192 fitur dengan baseline sebelum menjalankan depth ulang.
+- [x] Bandingkan kamera 4 fps penuh, overlap 64, resolusi SIFT 1600/8192 fitur: registrasi naik 73,7% → 82,5%, largest-map share 15,7% → 28,7%. Kandidat dense selesai tanpa mengubah produk lama.
+- [x] Gabungkan dua world dari kandidat dense melalui 20 shared cameras dengan 6 kamera validasi. `lantai3_aligned_1026/v001` membawa architecture GLB/denah/HTML, seluruh 824 viewpoint dan 10 fallback; QA browser lulus. Belum seluruh bangunan, artefak depth masih ada.
 - [ ] Bangun korespondensi gambar/PnP antar-world bila kamera tetap terpecah; validasi residual serta geometrinya sebelum gabungan.
 - [ ] Global TSDF/optimasi pose dan deduplikasi permukaan setelah transform lintas-world berhasil, baru fokus menutup gap yang punya bukti.
 
