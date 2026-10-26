@@ -90,6 +90,7 @@ flowchart TD
 | S05 | DA3 conditioned per komponen/window; frame/K/pose konsisten, optical-axis Z, unit map relatif |
 | S06 | Confidence/spatial/multi-view/person filtering, TSDF, GLB/PLY valid |
 | S06R | Actual-triangle render, SHA mesh/kamera, transform world→viewer sebelum exporter |
+| S06G | Alignment global opsional: shared camera Sim(3), validasi terpisah, orientasi dan cycle; `no_alignment` tetap membawa bukti/fallback |
 | S07 | Irisan, SVG/PNG, lintasan, viewer mesh. Bila lantai gagal, 3D valid dipertahankan dengan peringatan denah |
 | S08 | HTML embedded dan browser QA; setiap keyframe processed/gap, world berbeda tidak dipaksa digabung |
 | S09 | Menyiapkan input/prompt/schema review; tidak memulai reviewer |
@@ -99,6 +100,10 @@ flowchart TD
 Komponen yang seluruh frame-nya duplikat komponen lebih besar dapat dilewati; overlap sebagian dipertahankan. Coverage menghitung union ID frame. Kegagalan data per komponen dilaporkan, komponen lain yang valid tetap dipaketkan. Error runtime/model/resource tidak disamarkan sebagai kegagalan geometri.
 
 Profil room-tour default memakai adaptive sampling (base 2fps, high-motion 4fps) dan sequential matching overlap32. Loop closure hanya boleh diaktifkan jika `processing.vocab_tree_path` menunjuk ke vocabulary tree lokal; pipeline offline tidak mengunduh asset. `auto` tetap memakai exhaustive untuk≤400keyframe yang benar-benar diaudit (maks79.800pasangan); di atasnya sequential dengan overlap16. Adaptive sampling hanya memilih frame asli dan menaikkan kepadatan di interval gerak tinggi; tidak memperbaiki motion blur. Mode, overlap dan loop closure dapat diubah lewat `processing`; ini bukan jaminan semua video akan tersambung. Klip dinding polos dapat tetap gagal initial pair tanpa variasi geometri/kalibrasi yang cukup.
+
+`processing.global_alignment: true` menjalankan S06G setelah semua render. Minimal enam frame kamera bersama diperlukan: dua pertiga untuk fitting, sisanya untuk validasi. Maksimum error pusat kamera 2% bentang lintasan bersama dan orientasi 3°; lintasan hampir kollinear/refleksi/cycle tidak konsisten ditolak. Root memakai `main`, atau world valid dengan kamera terbanyak jika `main` tidak tersedia. GLB tiap area dikembalikan dari world tampilannya sebelum transformasi menuju viewer root diterapkan. Ini pemeriksaan konsistensi kamera, bukan ground truth.
+
+Jika lebih dari satu world terhubung ke root, `mesh/architecture.glb` dan pilihan **Arsitektur gabungan · kandidat** beserta denah tersedia dalam HTML. World lokal tetap tersedia untuk inspeksi. Tahap ini menggabungkan triangle teramati, belum melakukan global TSDF, menghapus permukaan ganda atau menutup lubang. World tanpa bukti tetap fallback. Bila tidak ada edge lolos, tidak dibuat mesh gabungan dummy; laporan `reports/global-alignment.json` menjelaskan `no_alignment`, dan pipeline komponen tetap selesai. Frame-ID yang sama diperlukan pada tahap ini; pencocokan gambar lintas-world/PnP bridge belum diimplementasikan.
 
 Jika semua komponen gagal, job failed dengan diagnosis di worker/stage log dan `component-failures.json` bila tersedia. Belum ada delivery mesh/tour atau paket review visual lengkap untuk kondisi tersebut. Tidak membuat geometri dummy.
 
@@ -173,9 +178,11 @@ end_product/<job>/
   latest.json                                            # pointer mutable
   v001/
     mesh/<component>.glb
+    mesh/architecture.glb                              # hanya jika alignment lolos
     denah/<component>.svg, <component>.png
     room_tour/index.html
     reports/{coverage.json,component-failures.json}
+    reports/global-alignment.json                      # bila S06G diaktifkan
     calibration.json, README.md, manifest.json
 ```
 

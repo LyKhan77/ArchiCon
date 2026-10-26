@@ -1,4 +1,16 @@
-# Progres eksekusi — 16 Oktober 2026
+# Progres eksekusi — 26 Oktober 2026
+
+## Global architecture — 26 Oktober 2026
+
+Branch `feature/global-architecture-alignment` menambahkan S06G setelah render komponen. Shared-frame camera centers dipasang dengan Umeyama Sim(3), lalu diperiksa dengan frame validasi terpisah, orientasi, conditioning dan cycle. GLB memakai `root_viewer × component_to_root × inverse(component_viewer)`; fixture memeriksa koordinat dan warna pada GLB asli. Kandidat gabungan hanya memuat world yang terhubung ke root; tahap ini belum global TSDF atau hole filling.
+
+Uji reuse nyata `lantai3_global_1026` selesai tanpa inference baru: 370/502 frame, 17 komponen, tanpa kegagalan komponen, browser QA offline/mobile lulus. Hasil alignment `no_alignment`: tidak ada shared frame-ID pada 17 world yang masuk delivery. Tidak ada `architecture.glb` dummy. Laporan baru: `end_product/lantai3_global_1026/v001/reports/global-alignment.json` (privat/lokal). Hasil ini belum perbaikan visual atau full-building reconstruction; review pending, skala relatif.
+
+Reuse sempat menolak world utama karena konfigurasi anotasi ditimpa worker duplikat pada sesi sebelumnya. Byte asli berhasil direkonstruksi dan dicocokkan tepat dengan SHA pada manifest surface sebelum dipulihkan. Byte yang berubah dibackup; mesh dan delivery final lama tidak diubah.
+
+Regresi lokal: 280 tes Python dijalankan, 277 lulus dan 3 skip backend; termasuk tes GLB nyata menggunakan pin Trimesh 5.1.1 di direktori dependency tes temporer, tanpa mengubah environment proyek. Tujuh tes JavaScript kalibrasi lulus. Uji kamera CPU `lantai3_dense_camera_1026` memakai frame asli 4 fps, sequential overlap64, SIFT longest-edge1600/max8192features; hasilnya perlu dibandingkan sebelum depth ulang.
+
+## Riwayat sebelum 26 Oktober 2026
 
 **Dokumentasi diperbarui 16 Oktober 2026.** Stack aktif: [TECHSTACK](TECHSTACK.md); prioritas: [ROADMAP](ROADMAP.md). Pengguna melaporkan job `lantai3_part1_1016_1525` selesai, overall OK. Status tetap completed/review pending/unassessed; pemisahan arsip tidak menjadi keputusan kualitas visual.
 

@@ -64,6 +64,7 @@ def describe_plan(job):
       S00='Verify input and transfer',S01='Pinned runtime/resource guards',S02='Decode full timeline and audit',
       S03='Camera components and trajectory checks',S04='Frame/grid/hash mask manifest',S05='Bounded DA3',
       S06='Filtering + TSDF',S06R='Camera renders and orientation provenance',S07='Plan + viewer mesh',
+      S06G='Optional validated global alignment; disconnected worlds remain fallback',
       S08='Standalone HTML + browser QA',S09='Manual visual review handoff',S10='Bounded typed refinement after apply-review',S11='Verified delivery',
       reuse=job.get('reuse',{}),delivery_root=job.get('delivery_root','end_product/part2'))
 

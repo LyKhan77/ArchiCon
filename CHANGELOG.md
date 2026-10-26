@@ -4,9 +4,13 @@ Completed changes are recorded here. Versions describe source checkpoints; priva
 
 ## [Unreleased]
 
-### Global architecture alignment (in progress)
+### Global architecture alignment — 2026-10-26
 
 - Added conservative camera-world similarity fitting and a deterministic alignment graph. Six shared cameras are required, with disjoint fit/validation cameras, position/orientation gates and cycle checks. Unsupported worlds remain separate; alignment does not validate metric scale or fill missing surfaces.
+- Added CPU-only S06G, checksummed input/output artifacts, viewer-transform compensation and optional `mesh/architecture.glb`. Compatible global candidates are included in the HTML/floorplan export while original component worlds remain available.
+- `no_alignment` is a successful diagnostic outcome with a transferred evidence report and no dummy global mesh. The real reused lantai3_part2 delivery has 17 worlds without shared frame IDs: it remains unaligned, pending review and incomplete. No new depth inference was used in this validation.
+- Restored the exact original annotation SHA for the previous adaptive main surface after diagnosing a duplicate-worker overwrite; overwritten bytes were backed up. Final meshes/products were not rewritten.
+- Verification: 280 Python tests (277 passed, 3 backend-dependent skips) with real GLB fixtures using the pinned Trimesh 5.1.1 in temporary test dependencies; 7 JavaScript calibration tests passed. The actual no-alignment delivery passed offline/mobile browser QA; this does not establish reconstruction quality.
 
 ### Changed
 

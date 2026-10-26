@@ -1,6 +1,6 @@
 # ROADMAP — ArchiCon
 
-**Status:** v1.3, diperbarui 16 Oktober 2026. Pipeline E2E mesh/denah/HTML dan dashboard lokal tersedia; penerimaan kualitas tetap manual. Pengguna melaporkan video ruangan baru selesai, overall OK; review formal tetap pending. Eksperimen closed sudah dipisahkan ke arsip dingin tanpa penghapusan.
+**Status:** diperbarui 26 Oktober 2026. Pipeline E2E dan adaptive sampling tersedia. S06G mendukung kandidat gabungan bila shared-camera alignment lolos; pada hasil lantai3_part2 saat ini world belum tersambung. Prioritas aktif: recovery konektivitas kamera, bukan peningkatan tampilan HTML. Review kualitas tetap manual.
 
 Rujukan: [PRD](PRD.md), [TECHSTACK](TECHSTACK.md), [ARCHICON](ARCHICON.md), [WORKFLOW](../WORKFLOW.md), [PROGRESS](PROGRESS.md). Rencana riset P0–P6 lama disimpan di arsip roadmap (`archive/ROADMAP-research-2026-10-14.md`, lokal); tidak menjadi daftar fitur yang sudah tersedia.
 
@@ -8,7 +8,7 @@ Rujukan: [PRD](PRD.md), [TECHSTACK](TECHSTACK.md), [ARCHICON](ARCHICON.md), [WOR
 
 Video → audit orientasi/PTS/keyframe → PyCOLMAP CPU → kamera/komponen terverifikasi → DA3 pose-conditioned depth → mask/filter/CPU TSDF → render dan denah → mesh viewer + HTML offline → browser QA → review manual.
 
-Laptop menjalankan ArchiCon/controller, SSH/rsync, packaging dan QA. Server menjalankan audit, kamera, inference dan geometri dengan runtime terpisah. Hanya UUID GPU0 yang diizinkan; semua guard RAM/disk/GPU tetap berlaku. MapAnything, Gaussian Splatting dan semantic architectural floorplan belum diterapkan.
+Laptop menjalankan ArchiCon/controller, SSH/rsync, packaging dan QA. Server menjalankan audit, kamera, inference dan geometri dengan runtime terpisah. Hanya satu UUID GPU pada profil aktif yang diizinkan; semua guard RAM/disk/GPU tetap berlaku. MapAnything, Gaussian Splatting dan semantic architectural floorplan belum diterapkan.
 
 ## 2. Milestone yang selesai
 
@@ -16,7 +16,8 @@ Laptop menjalankan ArchiCon/controller, SSH/rsync, packaging dan QA. Server menj
 |---|---|---|
 | Workspace dan resource | Profil lokal/server, cache lama read-only, runtime audit/inference/geometry, guard dan provenance | Runtime inference masih mewarisi package sistem/user; ketersediaan resource bukan reservasi |
 | Audit video | Rotasi, durasi/PTS, frame hashes, sharpness/exposure, contact sheet dan all-frame accounting | Keyframe/coverage bukan bukti seluruh interior terlihat |
-| Kamera | Pilot/validation, full take, matching auto, undistortion dan karantina pose ekstrem | Recovery PnP otomatis generik dan penggabungan world belum tersedia |
+| Kamera | Pilot/validation, full take, uniform/adaptive sampling, matching, undistortion dan karantina pose ekstrem | Recovery PnP bridge antar-world belum tersedia |
+| Global architecture | S06G shared-camera Sim(3), fit/validation/orientation/cycle gates, GLB/denah/HTML kandidat bila lolos | World tanpa shared frame cukup tetap fallback; belum global TSDF atau full-building coverage |
 | Depth dan mesh | DA3-LARGE lokal, window bounded, filtering, mask orang/anotasi, Open3D CPU TSDF, render triangle | Mask kaca tidak lengkap, holes/outlier mungkin ada, skala relatif |
 | Denah dan viewer | Draft SVG/PNG, mesh viewer ringan, orbit/roof clipping/viewpoints/playback, HTML offline, kalibrasi JSON per-komponen | Bukan denah arsitektur semantik atau panorama 360; acuan nyata belum ada |
 | Orchestrator | run/status/resume, worker detached, fingerprint/hash, transfer bundle, produk versi baru | Completed berarti komputasi selesai, bukan kualitas diterima |
@@ -59,6 +60,11 @@ end_product/<job>/vNNN/                Mesh, denah, room_tour, laporan, manifest
 Root PRD/ROADMAP/PROGRESS adalah pointer kompatibilitas. Hasil eksperimen lama dipindah utuh ke arsip; end_product/part1 dan end_product/part2 tetap pada tempatnya. Stack, file penanggung jawab dan runtime dijelaskan di [TECHSTACK](TECHSTACK.md); [restore arsip](OUTPUTS_ARCHIVE.md).
 
 ## 5. Prioritas setelah uji video baru
+
+- [x] Implementasikan S06G dan jalankan reuse hasil `lantai3_part2` tanpa inference baru. Uji nyata menghasilkan `no_alignment`: 17 world delivery tidak mempunyai shared frame-ID. Bukti lengkap di laporan delivery baru; bukan penerimaan kualitas.
+- [ ] Bandingkan kamera 4 fps penuh, overlap 64, resolusi SIFT 1600/8192 fitur dengan baseline sebelum menjalankan depth ulang.
+- [ ] Bangun korespondensi gambar/PnP antar-world bila kamera tetap terpecah; validasi residual serta geometrinya sebelum gabungan.
+- [ ] Global TSDF/optimasi pose dan deduplikasi permukaan setelah transform lintas-world berhasil, baru fokus menutup gap yang punya bukti.
 
 - [x] Dashboard dan dokumentasi cara run tersedia.
 - [x] Regresi stack acuan, HTTP packaging, upload/duplikasi ID dan desktop/mobile selesai.

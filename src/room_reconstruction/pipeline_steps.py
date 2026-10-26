@@ -151,6 +151,7 @@ def stage_command(root, stage, **params):
                    depth=('.venv-inference', 'run_full_depth.py'),
                    surface=('.venv-geometry', 'build_full_surface.py'),
                    render=('.venv-geometry', 'render_full_surface.py'),
+                   architecture=('.venv-geometry', 'build_global_architecture.py'),
                    tour=('.venv-geometry', 'export_room_tour.py'))
     runtime, script = scripts[stage]
     command = [str(root / runtime / 'bin/python'), str(root / 'scripts' / script), '--run-id', '@RUN_ID@']
@@ -324,8 +325,9 @@ def _sample(values, count):
     return [values[round(i * (len(values) - 1) / (count - 1))] for i in range(count)] if count > 1 else values[:count]
 
 
-def _bundle_files(root, audit, tour, components, selected):
-    required = {p for p in _validate_tour(root, tour, components) if not p.name.endswith("-sections.json")}
+def _bundle_files(root, audit, tour, components, selected, global_component=None):
+    tour_components = ([global_component] if global_component else []) + components
+    required = {p for p in _validate_tour(root, tour, tour_components) if not p.name.endswith("-sections.json")}
     required.update(tour / name for name in ("status.json", "manifest.json", "tour-data.json"))
     if (tour / "report.json").is_file(): required.add(tour / "report.json")
     required.update(audit / name for name in ("status.json", "frame_manifest.json", "audit_report.json"))
@@ -389,6 +391,49 @@ def _bundle_files(root, audit, tour, components, selected):
     artifacts = [dict(file=str(p.relative_to(root)), sha256=sha256_file(p), size_bytes=p.stat().st_size)
                  for p in sorted(required)]
     return artifacts, [str(p.relative_to(root)) for p in qa], evidence
+
+
+def _global_stage(root, job_dir, job, components, runner, common):
+    config = job_asset(root, job_dir, 'config', 'global-architecture.json')
+    inputs = sorted({_local(root, row[key], outputs=True) for row in components
+                     for key in ('mesh', 'cameras', 'render_manifest')})
+    root_id = ('main' if any(row['id'] == 'main' for row in components) else
+               min(components, key=lambda row: (-len(_json(root / row['cameras'])['frames']), row['id']))['id'])
+    _write(config, dict(schema_version=1, input_sha256=job['input_sha256'], components=components, root_component=root_id,
+        artifacts=[dict(file=str(path.relative_to(root)), sha256=sha256_file(path), size_bytes=path.stat().st_size)
+                   for path in inputs]))
+    params = dict(config=str(config.relative_to(root)))
+    run = runner.run('S06G_global', [config, *inputs], params, stage_command(root, 'architecture', **params),
+                     expected=('report.json', 'products/alignment.json', 'products/manifest.json'), **common)
+    _status(run, 'global_architecture', 'complete')
+    report = _json(run / 'report.json'); products = run / 'products'
+    manifest = _json(products / 'manifest.json')
+    if manifest.get('input_sha256') != job['input_sha256'] or manifest.get('input_hashes') != {
+            str(path.relative_to(root)): sha256_file(path) for path in inputs}:
+        raise ValueError('Global architecture input fingerprint differs')
+    paths = _artifacts(products, manifest['artifacts'])
+    if report != _json(products / 'report.json'):
+        # CLI also records the relative products subdirectory.
+        if {key: value for key, value in report.items() if key != 'products'} != _json(products / 'report.json'):
+            raise ValueError('Global architecture reports differ')
+    status, component = report['status'], report['component']
+    if status not in ('no_alignment', 'aligned_partial'):
+        raise ValueError('Unknown global alignment status')
+    if (status == 'no_alignment') != (component is None):
+        raise ValueError('Architecture mesh/status contradiction')
+    if component:
+        if component.get('id') != 'architecture' or len(report['aligned_components']) < 2:
+            raise ValueError('Global architecture requires multiple validated worlds')
+        for key in ('mesh', 'cameras', 'render_manifest'):
+            if _local(root, component[key], outputs=True) not in paths:
+                raise ValueError('Architecture component artifact is not hash-bound')
+    descriptor = dict(status=status, run_id=run.name, component=component,
+        aligned_components=report['aligned_components'], fallback_components=report['fallback_components'],
+        alignment=str((products / 'alignment.json').relative_to(root)))
+    paths.extend([products / 'manifest.json', run / 'status.json', run / 'report.json'])
+    artifacts = [dict(file=str(path.relative_to(root)), sha256=sha256_file(path), size_bytes=path.stat().st_size)
+                 for path in sorted(set(paths))]
+    return descriptor, artifacts
 
 
 def run_server(root, job_dir, job, runner):
@@ -506,20 +551,32 @@ def run_server(root, job_dir, job, runner):
     if not components:
         reasons = '; '.join(f"{row['id']}: {row['reason']}" for row in failed_components)
         raise ComponentDataError('No valid component remains; see component-failures.json. ' + reasons)
+    global_info, global_artifacts = None, []
+    if processing.get('global_alignment', False):
+        global_info, global_artifacts = _global_stage(root, job_dir, job, components, runner, common)
+    global_component = global_info['component'] if global_info else None
     if failed_components: reuse.pop('tour_run', None)
+    if global_component: reuse.pop('tour_run', None)
     if reuse.get('tour_run'):
         tour = _run(root, reuse['tour_run'])
     else:
         tour_config = job_asset(root,job_dir,'config','tour-config.json')
-        _write(tour_config, _tour_config(job, components, coverage))
+        tour_components = ([global_component] if global_component else []) + components
+        config_data = _tour_config(job, tour_components, coverage)
+        if global_info:
+            config_data['global_architecture'] = global_info
+        _write(tour_config, config_data)
         params = dict(config=str(tour_config.relative_to(root)))
-        inputs = [tour_config] + [_local(root, row[k], outputs=True) for row in components for k in ('mesh', 'render_manifest', 'cameras')]
+        inputs = [tour_config] + [_local(root, row[k], outputs=True) for row in tour_components for k in ('mesh', 'render_manifest', 'cameras')]
         tour = runner.run('S07_tour', inputs, params, stage_command(root, 'tour', **params),
                           expected=('tour-data.json', 'manifest.json'), **common)
-    artifacts, qa, evidence = _bundle_files(root, audit, tour, components, successful)
+    artifacts, qa, evidence = _bundle_files(root, audit, tour, components, successful, global_component)
+    inventory = {item['file']: item for item in artifacts + global_artifacts}
+    artifacts = [inventory[key] for key in sorted(inventory)]
     # Resolver metadata is part of the verified transfer, so laptop packaging
     # can locate nested stages without server-specific absolute paths.
     run_ids={audit.name,camera.name,tour.name}
+    if global_info: run_ids.add(global_info['run_id'])
     run_ids.update(row[key] for row in components for key in ('depth_run','surface_run','render_run'))
     for identifier in sorted(run_ids):
         index=run_index_path(root,identifier)
@@ -529,5 +586,6 @@ def run_server(root, job_dir, job, runner):
                   audit_run=audit.name, camera_run=camera.name, coverage=coverage, components=components,
                   tour_run=tour.name, artifacts=artifacts, qa=qa, qa_component_evidence=evidence)
     if failed_components: bundle['failed_components'] = failed_components
+    if global_info: bundle['global_architecture'] = global_info
     _write(job_dir / 'bundle.json', bundle)
     return bundle

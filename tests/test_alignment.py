@@ -89,6 +89,15 @@ class SimilarityTests(unittest.TestCase):
         self.assertEqual(report['status'], 'no_alignment')
         self.assertEqual(report['fallback_components'], ['b'])
 
+    def test_inconsistent_cycle_rejects_the_connected_candidate(self):
+        root = cameras(self.points, prefix='f') + cameras(self.points, prefix='g')
+        b = cameras(self.points, prefix='f') + cameras(self.points, prefix='h')
+        c = cameras(self.points, prefix='g') + cameras(self.points, transform(1, 0, (10, 0, 0)), prefix='h')
+        report = alignment.build_alignment(dict(main=root, b=b, c=c))
+        self.assertEqual(report['status'], 'no_alignment')
+        self.assertTrue(report['cycle_conflicts'])
+        self.assertEqual(report['fallback_components'], ['b', 'c'])
+
 
 if __name__ == '__main__':
     unittest.main()

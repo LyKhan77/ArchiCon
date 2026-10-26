@@ -8,6 +8,7 @@ processing:
   matching: sequential
   overlap: 32
   loop_detection: false
+  global_alignment: true
   max_exhaustive_frames: 400
   depth_resolution: 504
   confidence_quantile: 0.02

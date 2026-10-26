@@ -104,6 +104,11 @@ src/room_reconstruction/pipeline_delivery.py
 src/room_reconstruction/pipeline_cli.py
 scripts/pipeline_worker.py
 scripts/run_pipeline.py
+scripts/build_global_architecture.py
+src/room_reconstruction/alignment.py
+src/room_reconstruction/global_architecture.py
+tests/test_alignment.py
+tests/test_global_architecture.py
 tests/test_pipeline_state.py
 tests/test_pipeline_steps.py
 tests/test_pipeline_review.py

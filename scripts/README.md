@@ -62,6 +62,7 @@ Full-video entrypoints:
 | `run_full_depth.py --camera-component outputs/RUN/components/ID --run-id NAME` | Variable-N component, max16view/stride12, endpoint coverage, actual alignment capture; --max-windows partial bukan complete |
 | `build_full_surface.py --depth-run DEPTH --camera-component PATH --annotations FILE --run-id NAME` | Current-grid semantic boxes + spatial/MV filtering, coverage/strict comparison, shared unit-relative parameters; exclusive-create checkpoint |
 | `render_full_surface.py --surface-run SURFACE --run-id NAME` | Seluruh accepted component poses dirender sebagai triangle, per-frame PNG,2fps MP4,overview dan display-only GLB |
+| `build_global_architecture.py --config outputs/PATH/global-architecture.json --run-id NAME` | CPU-only S06G; checksum kamera/mesh/render, Sim(3) shared-frame validation, opsional architecture GLB dan laporan fallback. `no_alignment` tidak membuat mesh palsu |
 
 `full_take.prepare_component` menolak extreme trajectory centers sebelum inference.
 Pose gagal dipulihkan lewat query-only fixed-mapPnP bila strict gate lolos; tidak
