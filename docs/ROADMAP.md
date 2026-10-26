@@ -1,6 +1,6 @@
 # ROADMAP — ArchiCon
 
-**Status:** diperbarui 26 Oktober 2026. Pipeline E2E dan adaptive sampling tersedia. S06G mendukung kandidat gabungan bila shared-camera alignment lolos; pada hasil lantai3_part2 saat ini world belum tersambung. Prioritas aktif: recovery konektivitas kamera, bukan peningkatan tampilan HTML. Review kualitas tetap manual.
+**Status:** diperbarui 26 Oktober 2026. Pipeline E2E dan adaptive sampling tersedia. S06G mendukung kandidat gabungan bila shared-camera alignment lolos; pada hasil lantai3_part2 world belum tersambung. Eksperimen kamera pantry–IT mempertahankan 553/555 frame dalam satu world dengan diskontinuitas lintasan yang diperbaiki. Prioritas aktif: uji geometri dari kamera hasil koreksi dan recovery kamera lintas rekaman. Review kualitas tetap manual.
 
 Rujukan: [PRD](PRD.md), [TECHSTACK](TECHSTACK.md), [ARCHICON](ARCHICON.md), [WORKFLOW](../WORKFLOW.md), [PROGRESS](PROGRESS.md). Rencana riset P0–P6 lama disimpan di arsip roadmap (`archive/ROADMAP-research-2026-10-14.md`, lokal); tidak menjadi daftar fitur yang sudah tersedia.
 
@@ -64,6 +64,9 @@ Root PRD/ROADMAP/PROGRESS adalah pointer kompatibilitas. Hasil eksperimen lama d
 - [x] Implementasikan S06G dan jalankan reuse hasil `lantai3_part2` tanpa inference baru. Uji nyata menghasilkan `no_alignment`: 17 world delivery tidak mempunyai shared frame-ID. Bukti lengkap di laporan delivery baru; bukan penerimaan kualitas.
 - [x] Bandingkan kamera 4 fps penuh, overlap 64, resolusi SIFT 1600/8192 fitur: registrasi naik 73,7% → 82,5%, largest-map share 15,7% → 28,7%. Kandidat dense selesai tanpa mengubah produk lama.
 - [x] Gabungkan dua world dari kandidat dense melalui 20 shared cameras dengan 6 kamera validasi. `lantai3_aligned_1026/v001` membawa architecture GLB/denah/HTML, seluruh 824 viewpoint dan 10 fallback; QA browser lulus. Belum seluruh bangunan, artefak depth masih ada.
+- [x] Uji CPU calibrated-cache pada video pantry–IT: 553/555 frame tetap dalam satu world, seluruh frame pantry/koridor/IT terdaftar, lonjakan terbesar turun 407,72 → 1,44 kali median lintasan. Semua 553 frame undistorted lulus kontrak inference. Ini eksperimen kamera, belum hasil geometri atau fitur kalibrasi otomatis default.
+- [ ] Lanjutkan job `lantai2_part4_calib_1026` ketika GPU resmi tersedia, lalu bandingkan mesh, denah, source/render dan alur ruang. Pada checkpoint pencatatan job menunggu resource; cek status live sebelum resume.
+- [ ] Setelah geometri kandidat terbukti, evaluasi integrasi refinement kalibrasi dan pemeriksaan kontinuitas kamera secara bounded untuk video lain; jangan menyamakan residual/coverage tinggi dengan tata ruang yang benar.
 - [ ] Bangun korespondensi gambar/PnP antar-world bila kamera tetap terpecah; validasi residual serta geometrinya sebelum gabungan.
 - [ ] Global TSDF/optimasi pose dan deduplikasi permukaan setelah transform lintas-world berhasil, baru fokus menutup gap yang punya bukti.
 

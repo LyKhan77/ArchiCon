@@ -4,6 +4,13 @@ Completed changes are recorded here. Versions describe source checkpoints; priva
 
 ## [Unreleased]
 
+### Pantry–IT camera refinement checkpoint — 2026-10-26
+
+- A private CPU-only calibrated-cache experiment on `lantai2_part4.MOV` retained 553/555 audited observations in one camera world, including every audited pantry/corridor/IT observation. Native temporal discontinuities around 20, 62 and 97.8 seconds were corrected: the largest speed-to-median diagnostic fell from 407.72 to 1.44 across the full trajectory, without smoothing poses or changing mapper/triangulation thresholds.
+- Shared triangulated tracks at the four inspected transitions increased from 0/0/12/12 to 822/137/809/779. The refined model passed the existing calibration/residual gates and all 553 undistorted frames passed the inference input contract. This is camera consistency evidence, not metric or mesh-quality acceptance.
+- Job `lantai2_part4_calib_1026` reuses that take's audit and corrected cameras. At the recorded checkpoint it is `waiting_resources` before inference; no depth, mesh, floorplan or HTML product for this take has been produced.
+- Refinement scripts/evidence remain private experiments; the default pipeline has not gained automatic calibrated re-verification. Original attempts/products and baseline feature/match data remain unchanged. See [progress](docs/PROGRESS.md) and [priorities](docs/ROADMAP.md).
+
 ### Global architecture alignment — 2026-10-26
 
 - Added conservative camera-world similarity fitting and a deterministic alignment graph. Six shared cameras are required, with disjoint fit/validation cameras, position/orientation gates and cycle checks. Unsupported worlds remain separate; alignment does not validate metric scale or fill missing surfaces.
