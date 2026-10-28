@@ -7,6 +7,7 @@ Completed changes are recorded here. Versions describe source checkpoints; priva
 ### Fixed — 2026-10-28
 
 - Added a regression check for the remote sync manifest and included `src/room_reconstruction/scope.py`. Remote workers now receive the scope module required by `pipeline_steps.py`.
+- S02 audit contact sheets now recover a missing review thumbnail from its extracted keyframe, while still failing when both evidence images are unavailable.
 
 ### Single-room scope — 2026-10-28
 

@@ -196,7 +196,20 @@ def _contact_sheets(run: Path, rows: list[dict], prefix: str) -> list[str]:
     for offset in range(0, len(rows), 12):
         canvas = np.full((3 * (height + label), 4 * width, 3), 245, np.uint8)
         for cell, row in enumerate(rows[offset:offset + 12]):
-            image = cv2.imread(str(run / row["thumbnail_path"]))
+            thumbnail = run / row["thumbnail_path"]
+            image = cv2.imread(str(thumbnail))
+            if image is None and row.get("image_path"):
+                # A single review thumbnail can be lost on a busy remote filesystem;
+                # the extracted keyframe remains the authoritative source image.
+                fallback = cv2.imread(str(run / row["image_path"]))
+                if fallback is not None:
+                    factor = min(1.0, 512 / max(fallback.shape[:2]))
+                    if factor < 1.0:
+                        fallback = cv2.resize(fallback, (round(fallback.shape[1] * factor),
+                                                         round(fallback.shape[0] * factor)))
+                    if not cv2.imwrite(str(thumbnail), fallback):
+                        raise RuntimeError("Cannot recover missing review thumbnail")
+                    image = fallback
             if image is None:
                 raise ValueError("Missing review thumbnail")
             factor = min(width / image.shape[1], height / image.shape[0])

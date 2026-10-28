@@ -11,10 +11,28 @@ from pathlib import Path
 import cv2
 
 from room_reconstruction.ingestion import (_extract_frames, assign_splits, audit_video,
-                                           choose_adaptive_frames, choose_best_frames, parse_timestamps)
+                                           choose_adaptive_frames, choose_best_frames, parse_timestamps,
+                                           _contact_sheets)
 
 
 class IngestionTests(unittest.TestCase):
+    def test_contact_sheet_recovers_missing_thumbnail_from_extracted_frame(self):
+        with tempfile.TemporaryDirectory() as temp:
+            run = Path(temp)
+            (run / "review/thumbnails").mkdir(parents=True)
+            (run / "frames").mkdir()
+            image = 255 * __import__("numpy").ones((24, 32, 3), dtype="uint8")
+            self.assertTrue(cv2.imwrite(str(run / "frames/keyframe_000000.jpg"), image))
+            row = {
+                "source_index": 1513,
+                "timestamp_seconds": 12.5,
+                "thumbnail_path": "review/thumbnails/frame_001513.jpg",
+                "image_path": "frames/keyframe_000000.jpg",
+            }
+            result = _contact_sheets(run, [row], "overview")
+            self.assertEqual(result, ["review/overview_01.jpg"])
+            self.assertIsNotNone(cv2.imread(str(run / row["thumbnail_path"])))
+
     def test_audit_cli_persists_failure_when_provenance_collection_fails(self):
         script = Path(__file__).resolve().parents[1] / "scripts/audit_video.py"
         spec = importlib.util.spec_from_file_location("audit_cli_test", script)
