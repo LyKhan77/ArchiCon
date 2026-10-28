@@ -4,6 +4,10 @@ Completed changes are recorded here. Versions describe source checkpoints; priva
 
 ## [Unreleased]
 
+### Fixed — 2026-10-28
+
+- Added a regression check for the remote sync manifest and included `src/room_reconstruction/scope.py`. Remote workers now receive the scope module required by `pipeline_steps.py`.
+
 ### Single-room scope — 2026-10-28
 
 - Added normalized job scope metadata for `full_traversal`, `single_room`, and `connected_area`, with optional time bounds and source-frame provenance.
