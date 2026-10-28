@@ -122,6 +122,7 @@ src/room_reconstruction/pipeline_cameras.py
 tests/test_pipeline_cameras.py
 schemas/agent-review.schema.json
 src/room_reconstruction/pipeline_layout.py
+src/room_reconstruction/scope.py
 tests/test_pipeline_layout.py
 docs/PRD.md
 docs/ROADMAP.md
