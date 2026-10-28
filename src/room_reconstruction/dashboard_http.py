@@ -122,7 +122,7 @@ def make_server(service, *, port=8765):
                     return self._json(201,result)
                 if path=='/api/jobs':
                     data=self._body()
-                    return self._json(201,service.start_job(data.get('input_path',''),data.get('job_id','')))
+                    return self._json(201,service.start_job(data.get('input_path',''),data.get('job_id',''),data.get('scope')))
                 match=re.fullmatch(r'/api/jobs/([A-Za-z0-9_-]+)/resume',path)
                 if match:
                     return self._json(202,service.resume_job(match.group(1)))

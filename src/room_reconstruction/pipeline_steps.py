@@ -14,6 +14,7 @@ import subprocess
 
 from .provenance import sha256_file
 from .pipeline_layout import resolve_run_dir,run_index_path,job_asset
+from .scope import normalize_scope
 
 
 class ComponentDataError(ValueError):
@@ -116,7 +117,7 @@ def camera_matching_mode(processing,frame_count):
 
 
 def capture_config(video, digest, duration, fps=2.0, *, sampling_mode='uniform',
-                   adaptive_target_fps=None, motion_threshold=.03):
+                   adaptive_target_fps=None, motion_threshold=.03, scope=None):
     duration, fps = float(duration), float(fps)
     if not all(math.isfinite(v) and v > 0 for v in (duration, fps)) or fps > 10:
         raise ValueError('Positive duration and target FPS <= 10 required')
@@ -129,7 +130,8 @@ def capture_config(video, digest, duration, fps=2.0, *, sampling_mode='uniform',
     motion_threshold = float(motion_threshold)
     if not math.isfinite(motion_threshold) or not 0 <= motion_threshold <= 1:
         raise ValueError('Motion threshold must be finite and in [0, 1]')
-    return dict(schema_version=1, input_video=str(video),
+    normalized_scope = normalize_scope(scope, duration_seconds=duration)
+    return dict(schema_version=1, input_video=str(video), scope=normalized_scope,
                 verified_metadata=dict(sha256=digest, duration_seconds=duration),
                 sampling=dict(target_fps=fps, max_keyframes=math.ceil(duration * (adaptive_target_fps or fps)) + 4,
                               mode=sampling_mode, adaptive_target_fps=adaptive_target_fps,
@@ -292,7 +294,7 @@ def _coverage(audit, selected):
 
 def _tour_config(job, components, coverage):
     return dict(title=job.get('title', Path(job['input_video']).stem + ' · ruang dan lintasan'),
-                source=job['input_video'], components=components, coverage=coverage,
+                source=job['input_video'], scope=job.get('scope'), components=components, coverage=coverage,
                 viewer_voxel_divisor=job.get('processing', {}).get('viewer_voxel_divisor', 450),
                 limitations=[f"{coverage['processed']} dari {coverage['attempted']} keyframe diproses; "
                              f"{len(coverage['gaps'])} keyframe belum memiliki geometri.",
@@ -475,7 +477,7 @@ def run_server(root, job_dir, job, runner):
             job['input_video'], job['input_sha256'], duration, processing.get('target_fps', 2),
             sampling_mode=processing.get('sampling_mode', 'uniform'),
             adaptive_target_fps=processing.get('adaptive_target_fps'),
-            motion_threshold=processing.get('motion_threshold', .03)))
+            motion_threshold=processing.get('motion_threshold', .03), scope=job.get('scope')))
         params = dict(capture=str(capture.relative_to(root)), threads=4)
         audit = runner.run('S02_audit', [video, capture], params, stage_command(root, 'audit', **params),
                            expected=('frame_manifest.json', 'audit_report.json'), **common)
@@ -595,6 +597,7 @@ def run_server(root, job_dir, job, runner):
         if index.is_file():
             artifacts.append(dict(file=str(index.relative_to(root)),sha256=sha256_file(index),size_bytes=index.stat().st_size))
     bundle = dict(schema_version=1, job_id=job['job_id'], input_sha256=job['input_sha256'],
+                  scope=job.get('scope'),
                   audit_run=audit.name, camera_run=camera.name, coverage=coverage, components=components,
                   tour_run=tour.name, artifacts=artifacts, qa=qa, qa_component_evidence=evidence)
     if failed_components: bundle['failed_components'] = failed_components

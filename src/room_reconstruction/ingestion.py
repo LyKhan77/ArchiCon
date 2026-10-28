@@ -15,6 +15,7 @@ import cv2
 import numpy as np
 
 from .provenance import sha256_file, write_json
+from .scope import normalize_scope
 
 
 def _json_command(args: list[str]) -> dict:
@@ -245,7 +246,7 @@ def audit_video(video: Path, run_dir: Path, target_fps: float = 2.0, max_keyfram
                 review_longest_edge: int = 512, split_seed: int = 7, validation_fraction: float = 0.2,
                 expected_sha256: str | None = None, threads: int = 4,
                 sampling_mode: str = "uniform", adaptive_target_fps: float | None = None,
-                motion_threshold: float = 0.03) -> dict:
+                motion_threshold: float = 0.03, scope: dict | None = None) -> dict:
     video, run = Path(video).resolve(), Path(run_dir)
     if not math.isfinite(target_fps) or target_fps <= 0 or max_keyframes < 2 or threads < 1:
         raise ValueError("Invalid audit parameters")
@@ -254,24 +255,33 @@ def audit_video(video: Path, run_dir: Path, target_fps: float = 2.0, max_keyfram
     if expected_sha256 is not None and digest != expected_sha256:
         raise ValueError("Source video checksum differs from capture configuration")
     metadata = probe_video(video)
+    scope = normalize_scope(scope, duration_seconds=float(metadata["format"]["duration"]))
     origin, times = probe_timestamps(video)
     rows = _scan(video, run, times, metadata["display_size"], target_fps, review_longest_edge, threads)
+    start, end = scope["start_time_seconds"], scope["end_time_seconds"]
+    for row in rows:
+        row["in_scope"] = ((start is None or row["timestamp_seconds"] >= start)
+                            and (end is None or row["timestamp_seconds"] < end))
+    in_scope_rows = [row for row in rows if row["in_scope"]]
+    if not in_scope_rows:
+        raise ValueError("Scope range contains no auditable source frames")
     if sampling_mode not in ("uniform", "adaptive"):
         raise ValueError("sampling_mode must be uniform or adaptive")
     if sampling_mode == "adaptive":
         high_fps = target_fps if adaptive_target_fps is None else adaptive_target_fps
         selected = [dict(row) for row in choose_adaptive_frames(
-            rows, target_fps, high_fps, motion_threshold, max_keyframes)]
+            in_scope_rows, target_fps, high_fps, motion_threshold, max_keyframes)]
     else:
         high_fps = None
-        selected = [dict(row) for row in choose_best_frames(rows, target_fps, max_keyframes)]
+        selected = [dict(row) for row in choose_best_frames(in_scope_rows, target_fps, max_keyframes)]
     if not selected:
         raise ValueError("No keyframes selected")
     median = float(np.median([row["sharpness"] for row in selected]))
     splits = assign_splits([r["timestamp_seconds"] for r in selected], split_seed, validation_fraction)
     for row, split in zip(selected, splits):
         row.update({"frame_id": f"source_{row['source_index']:06d}", "source_pts_seconds": origin + row["timestamp_seconds"],
-                    "split": split, "low_sharpness_relative": row["sharpness"] < 0.35 * median,
+                    "split": split, "in_scope": True,
+                    "low_sharpness_relative": row["sharpness"] < 0.35 * median,
                     "decision": "retained_for_coverage"})
     _extract_frames(video, run, selected, threads)
     for row in selected:
@@ -293,7 +303,10 @@ def audit_video(video: Path, run_dir: Path, target_fps: float = 2.0, max_keyfram
         "source_video": str(video), "source_sha256": digest, "duration_seconds": duration,
         "encoded_size": [metadata["stream"]["width"], metadata["stream"]["height"]],
         "display_size": metadata["display_size"], "rotation_degrees": metadata["rotation_degrees"],
-        "decoded_frames": len(times), "keyframes": len(selected), "timestamp_basis": "decoder_best_effort_pts",
+        "decoded_frames": len(times), "keyframes": len(selected), "scope": scope,
+        "in_scope_source_frames": len(in_scope_rows),
+        "out_of_scope_source_frames": len(rows) - len(in_scope_rows),
+        "timestamp_basis": "decoder_best_effort_pts",
         "source_pts_origin_seconds": origin, "first_selected_seconds": selected_times[0],
         "last_selected_seconds": selected_times[-1], "largest_temporal_gap_seconds": max(gaps),
         "target_fps": target_fps, "sampling_mode": sampling_mode,
@@ -309,9 +322,11 @@ def audit_video(video: Path, run_dir: Path, target_fps: float = 2.0, max_keyfram
                         "Low-texture windows retained; masks and geometric consistency checks remain pending.",
                         "No reconstruction or verified scale is produced by this audit."],
     }
-    write_json(run / "source_manifest.json", {"source_sha256": digest, "source_path": str(video), "metadata": metadata})
+    write_json(run / "source_manifest.json", {"source_sha256": digest, "source_path": str(video),
+               "metadata": metadata, "scope": scope,
+               "out_of_scope_source_frames": len(rows) - len(in_scope_rows)})
     write_json(run / "frame_manifest.json", {"schema_version": 1, "source_sha256": digest,
-               "timestamp_basis": report["timestamp_basis"], "frames": selected})
+               "timestamp_basis": report["timestamp_basis"], "scope": scope, "frames": selected})
     write_json(run / "audit_report.json", report)
     reports = run / "reports"
     reports.mkdir()

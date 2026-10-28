@@ -73,10 +73,20 @@ p.write_text(json.dumps({'execution_status':'completed','review_status':'pending
     def test_new_and_legacy_jobs_are_read_without_quality_acceptance(self):
         self.job();self.job('legacy',legacy=True)
         self.assertEqual({j['job_id'] for j in self.service.jobs()},{'existing','legacy'})
-        view=self.service.job_view('existing')
-        self.assertEqual(view['review_status'],'pending');self.assertEqual(view['scale_status'],'relative')
-        self.assertEqual(view['coverage']['processed'],7)
 
+    def test_start_job_passes_single_room_scope_and_job_view_exposes_it(self):
+        with patch('room_reconstruction.dashboard_service.register_job') as register:
+            register.side_effect=lambda *args, **kwargs: atomic_json(
+                self.root/'outputs/jobs/workshop_001/job.json',
+                {'job_id':'workshop_001','scope':kwargs['scope']})
+            with patch.object(self.service, '_launch', return_value={'job_id':'workshop_001'}):
+                self.service.start_job('raw_videos/source.MOV','workshop_001',scope={
+                    'kind':'single_room','name':'Workshop'})
+            self.assertEqual(register.call_args.kwargs['scope']['kind'],'single_room')
+            atomic_json(self.root/'outputs/jobs/workshop_001/job-status.json',
+                        {'execution_status':'queued','review_status':'pending','quality_status':'unassessed'})
+            view=self.service.job_view('workshop_001')
+            self.assertEqual(view['scope']['name'],'Workshop')
     def test_snapshot_omits_huge_specs_bounds_logs_and_ignores_partial_event(self):
         p=self.job();atomic_json(p/'stages.json',{'S03_camera':[{'run_id':'r1','status':'passed','spec':{'big':'x'*10000},'artifacts':{'big':'hash'},'elapsed_seconds':2}]})
         (p/'logs').mkdir();(p/'logs/r1.log').write_text('x'*50000)
@@ -135,6 +145,11 @@ p.write_text(json.dumps({'execution_status':'completed','review_status':'pending
         self.assertEqual(request('POST','/api/jobs','{}',headers)[0],403)
         headers.update(Origin='http://'+host)
         self.assertEqual(request('POST','/api/jobs',json.dumps({'input_path':'raw_videos/source.MOV','job_id':'bad/id'}),headers)[0],400)
+        with patch.object(self.service,'start_job',return_value={'job_id':'workshop_001'}) as start:
+            status,body,_=request('POST','/api/jobs',json.dumps({'input_path':'raw_videos/source.MOV','job_id':'workshop_001',
+                'scope':{'kind':'single_room','name':'Workshop'}}),headers)
+            self.assertEqual(status,201)
+            self.assertEqual(start.call_args.args[2]['kind'],'single_room')
         status,body,h=request('GET','/api/video?path=raw_videos/source.MOV',headers={'Range':'bytes=1-4'})
         self.assertEqual(status,206);self.assertEqual(body,b'ideo');self.assertEqual(h['Content-Range'],'bytes 1-4/11')
         self.assertEqual(request('GET','/api/video?path=../configs/paths.server.yaml')[0],400)

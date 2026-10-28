@@ -21,6 +21,7 @@ from .dashboard_snapshot import read_json, snapshot, tail
 from .pipeline_cli import register_job
 from .pipeline_layout import job_dir, validate_job_id
 from .pipeline_state import atomic_json, FileLock
+from .scope import normalize_scope
 
 VIDEO_EXTENSIONS={'.mov','.mp4','.m4v','.webm','.avi','.mkv'}
 
@@ -119,11 +120,19 @@ class DashboardService:
         threading.Thread(target=reap,name='archicon-controller-wait',daemon=True).start()
         return dict(job_id=jid,pid=proc.pid)
 
-    def start_job(self, input_path, job_id):
+    def start_job(self, input_path, job_id, scope=None):
         validate_job_id(job_id); video=self.input_file(input_path); lock=self._acquire()
         try:
             target=yaml.safe_load((self.root/'configs/paths.local.yaml').read_text())['server']['ssh_target']
-            register_job(self.root,video,job_id,'configs/paths.server.yaml','configs/pipeline.yaml',ssh_target=target,review_mode='manual')
+            if scope is not None:
+                scope=normalize_scope(scope)
+            if scope is not None and any(scope.get(key) is not None for key in ('start_time_seconds','end_time_seconds')):
+                probe=subprocess.run(['ffprobe','-v','error','-show_entries','format=duration','-of','json',str(video)],
+                                     capture_output=True,text=True,check=True,timeout=60)
+                duration=float(json.loads(probe.stdout)['format']['duration'])
+                scope=normalize_scope(scope,duration_seconds=duration)
+            register_job(self.root,video,job_id,'configs/paths.server.yaml','configs/pipeline.yaml',
+                         ssh_target=target,review_mode='manual',scope=scope)
             return self._launch(job_id,lock)
         finally: lock.__exit__(None,None,None)
 
@@ -219,6 +228,7 @@ class DashboardService:
             except (KeyError,ValueError):pass
         return dict(job_id=jid,title=job.get('title',jid),execution_status=status,review_status=state.get('review_status','pending'),
                     quality_status=state.get('quality_status','unassessed'),scale_status=state.get('scale_status','relative'),
+                    scope=job.get('scope',{'kind':'full_traversal','name':None,'start_time_seconds':None,'end_time_seconds':None,'source_policy':'full_input_video'}),
                     full_room_reconstruction_complete=state.get('full_room_reconstruction_complete',False),
                     coverage=state.get('coverage') or live.get('coverage'),failed_components=state.get('failed_components',[]),
                     reason=state.get('reason') or live.get('worker',{}).get('reason',''),phase=local_phase,

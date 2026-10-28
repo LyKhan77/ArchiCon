@@ -68,7 +68,8 @@ def run_full(root, run, args):
                                                   component_quality, coverage_summary)
     from room_reconstruction.poses import copy_pilot_images, observation_residuals
     frames = select_full_frames(manifest['frames'])
-    common = {'audit_run': args.audit_run, 'audit_manifest_sha256': sha256_file(manifest_path),
+    common = {'audit_run': args.audit_run, 'scope': manifest.get('scope'),
+              'audit_manifest_sha256': sha256_file(manifest_path),
               'audit_status_sha256': sha256_file(audit_status_path), 'source_sha256': manifest['source_sha256'],
               'production_uses_original_validation': True, 'reconstruction_role': 'production',
               'matching_policy': {'mode': args.matching,

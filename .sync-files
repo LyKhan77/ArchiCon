@@ -97,6 +97,7 @@ web/tour/main.js
 web/tour/style.css
 configs/pipeline.yaml
 configs/pipeline.dense.yaml
+configs/pipeline.single-room.yaml
 configs/reuse_l2bp3.json
 src/room_reconstruction/pipeline_state.py
 src/room_reconstruction/pipeline_steps.py

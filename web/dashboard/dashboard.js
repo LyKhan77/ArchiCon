@@ -26,6 +26,20 @@ function updateRunButton(){
   $('busy-notice').hidden=!state.busy;
   $('busy-notice').textContent='Satu rekonstruksi sedang berjalan. Anda dapat menyiapkan video; mulai setelah job aktif selesai.';
 }
+function updateScopeFields(){
+  const scoped=$('scope-kind').value!=='full_traversal';
+  $('scope-fields').hidden=!scoped;
+  $('scope-name').required=scoped;
+}
+function readScope(){
+  const kind=$('scope-kind').value;
+  if(kind==='full_traversal')return {kind};
+  const scope={kind,name:$('scope-name').value.trim()};
+  const start=$('scope-start').value.trim(),end=$('scope-end').value.trim();
+  if(start)scope.start_time_seconds=Number(start);
+  if(end)scope.end_time_seconds=Number(end);
+  return scope;
+}
 async function refreshInputs(){
   state.inputs=await api('/api/inputs');const selected=$('existing-video').value;
   $('existing-video').innerHTML='<option value="">Pilih video yang sudah tersedia</option>'+state.inputs.map(x=>`<option value="${esc(x.path)}">${esc(x.path.replace(/^raw_videos\//,''))} · ${bytes(x.size_bytes)}</option>`).join('');
@@ -68,7 +82,9 @@ function renderProgress(){
   const job=state.job;$('progress-empty').hidden=!!job;$('progress-content').hidden=!job;if(!job)return;
   const status=job.execution_status;const phase=job.phase?.phase;
   const runningStage=job.stages.find(s=>s.status==='running');
+  const scopeLabel=job.scope?.kind==='single_room'?'Single room':job.scope?.kind==='connected_area'?'Connected area':'Full traversal';
   $('phase-title').textContent=status==='completed'?'Hasil siap untuk review manual':status==='failed'?'Proses terhenti':status==='waiting_resources'?'Menunggu resource server':phases[phase]||'Merekonstruksi ruang';
+  $('telemetry-note').dataset.scope=scopeLabel+(job.scope?.name?' · '+job.scope.name:'');
   if(runningStage&&phase==='processing')$('phase-title').textContent=groups.find(g=>runningStage.stage.startsWith(g[2]))?.[1]||'Merekonstruksi ruang';
   $('execution-badge').textContent=execution[status]||status;$('execution-badge').className='status-label '+status;
   $('resume-job').hidden=job.controller_active||status==='completed';$('resume-job').disabled=state.busy;
@@ -94,6 +110,9 @@ function renderProgress(){
 function outputMode(mode){state.outputTab=mode;$('show-tour').classList.toggle('selected',mode==='tour');$('show-plan').classList.toggle('selected',mode==='plan');$('tour-frame').hidden=mode!=='tour';$('plan-grid').hidden=mode!=='plan';}
 function renderOutput(){
   const job=state.job;const ready=!!job?.delivery;$('output-empty').hidden=ready;$('output-content').hidden=!ready;if(!ready)return;
+  const scopeNames={full_traversal:'Full traversal',single_room:'Single room',connected_area:'Connected area'};
+  const scope=job.scope||{kind:'full_traversal'};
+  $('scope-label').textContent='Scope: '+(scopeNames[scope.kind]||scope.kind)+(scope.name?' — '+scope.name:'')+' · kualitas tetap menunggu review manual';
   $('download-package').href='/api/jobs/'+encodeURIComponent(job.job_id)+'/package';$('delivery-path').textContent=job.delivery;
   const note=$('review-note');note.querySelector('strong').textContent=reviews[job.review_status]||'Review manual';
   note.querySelector('span').textContent=job.review_status==='needs_capture'?'Ada area yang perlu direkam ulang. Periksa coverage dan catatan review.':job.review_status==='passed'?'Keputusan review tersimpan. Periksa batas kualitas dan kalibrasi ukuran pada laporan.':'Komputasi selesai. Kualitas geometri dan kelengkapan ruang perlu diperiksa.';
@@ -132,7 +151,7 @@ $('input-form').addEventListener('submit',async event=>{
   state.submitting=true;updateRunButton();$('alert').hidden=true;
   try{
     if(state.file){const result=await upload(state.file);path=result.path;state.file=null;await refreshInputs();$('existing-video').value=path;}
-    const result=await api('/api/jobs',{method:'POST',body:JSON.stringify({input_path:path,job_id:id})});state.selected=result.job_id;await poll();tab('progress');
+    const result=await api('/api/jobs',{method:'POST',body:JSON.stringify({input_path:path,job_id:id,scope:readScope()})});state.selected=result.job_id;await poll();tab('progress');
   }catch(error){notify(error.message);}finally{state.submitting=false;updateRunButton();}
 });
 $('video-file').addEventListener('change',()=>chooseFile($('video-file').files[0]));
@@ -142,13 +161,14 @@ $('source-video').addEventListener('error',()=>{$('video-meta').textContent='Cod
 for(const name of ['dragenter','dragover'])$('drop-zone').addEventListener(name,event=>{event.preventDefault();$('drop-zone').classList.add('dragging');});
 for(const name of ['dragleave','drop'])$('drop-zone').addEventListener(name,event=>{event.preventDefault();$('drop-zone').classList.remove('dragging');if(name==='drop')chooseFile(event.dataTransfer.files[0]);});
 $('cancel-upload').addEventListener('click',()=>state.upload?.abort());$('dismiss-alert').addEventListener('click',()=>{$('alert').hidden=true;});
-$('new-job').addEventListener('click',()=>{state.selected=null;state.job=null;$('page-title').textContent='Dari rekaman, menjadi ruang.';$('page-subtitle').textContent='Unggah video ruangan. Ikuti prosesnya. Jelajahi hasilnya.';$('breadcrumb').textContent='Workspace / Rekonstruksi baru';$('job-id').value='';$('tour-frame').removeAttribute('src');renderProgress();tab('input');poll();});
+  $('new-job').addEventListener('click',()=>{state.selected=null;state.job=null;$('page-title').textContent='Dari rekaman, menjadi ruang.';$('page-subtitle').textContent='Unggah video ruangan. Ikuti prosesnya. Jelajahi hasilnya.';$('breadcrumb').textContent='Workspace / Rekonstruksi baru';$('job-id').value='';$('scope-kind').value='full_traversal';$('scope-name').value='';$('scope-start').value='';$('scope-end').value='';updateScopeFields();$('tour-frame').removeAttribute('src');renderProgress();tab('input');poll();});
 $('job-list').addEventListener('click',event=>{const button=event.target.closest('[data-job]');if(button)selectJob(button.dataset.job).catch(error=>notify(error.message));});
 for(const button of document.querySelectorAll('[data-tab]')){button.addEventListener('click',()=>tab(button.dataset.tab));button.addEventListener('keydown',event=>{const items=[...document.querySelectorAll('[data-tab]')];const i=items.indexOf(button);let target;if(event.key==='ArrowRight')target=items[(i+1)%items.length];if(event.key==='ArrowLeft')target=items[(i+items.length-1)%items.length];if(event.key==='Home')target=items[0];if(event.key==='End')target=items.at(-1);if(target){event.preventDefault();tab(target.dataset.tab);target.focus();}});}
 $('resume-job').addEventListener('click',async()=>{try{$('resume-job').disabled=true;await api('/api/jobs/'+encodeURIComponent(state.selected)+'/resume',{method:'POST'});await poll();}catch(error){notify(error.message);$('resume-job').disabled=false;}});
 $('show-tour').addEventListener('click',()=>outputMode('tour'));$('show-plan').addEventListener('click',()=>outputMode('plan'));
+$('scope-kind').addEventListener('change',updateScopeFields);
 async function init(){
-  try{const config=await api('/api/config');state.token=config.token;state.maxUpload=config.max_upload_bytes;$('file-help').textContent='MOV, MP4, M4V, WebM, AVI, MKV · maks. '+bytes(state.maxUpload);await refreshInputs();if(config.control.busy)state.selected=config.control.job_id;await poll();if(state.selected)tab('progress');}
+  try{const config=await api('/api/config');state.token=config.token;state.maxUpload=config.max_upload_bytes;updateScopeFields();$('file-help').textContent='MOV, MP4, M4V, WebM, AVI, MKV · maks. '+bytes(state.maxUpload);await refreshInputs();if(config.control.busy)state.selected=config.control.job_id;await poll();if(state.selected)tab('progress');}
   catch(error){connected(false);notify(error.message+' Jalankan backend ArchiCon lalu muat ulang.');}
   setInterval(poll,4000);
 }
