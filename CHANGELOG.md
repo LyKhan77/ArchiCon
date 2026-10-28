@@ -4,6 +4,12 @@ Completed changes are recorded here. Versions describe source checkpoints; priva
 
 ## [Unreleased]
 
+### Single-room scope — 2026-10-28
+
+- Added normalized job scope metadata for `full_traversal`, `single_room`, and `connected_area`, with optional time bounds and source-frame provenance.
+- Dashboard and delivery reports can label a single-room/connected-area reconstruction without changing DA3, TSDF, resource guards or manual review semantics. `full_room_reconstruction_complete` remains false until an independent review decision.
+- Added `configs/pipeline.single-room.yaml` for the `workshop.MOV` pilot. LingBot-Map is not installed or invoked; only bounded-scope orchestration concepts are represented.
+
 ### Pantry–IT camera refinement checkpoint — 2026-10-26
 
 - A private CPU-only calibrated-cache experiment on `lantai2_part4.MOV` retained 553/555 audited observations in one camera world, including every audited pantry/corridor/IT observation. Native temporal discontinuities around 20, 62 and 97.8 seconds were corrected: the largest speed-to-median diagnostic fell from 407.72 to 1.44 across the full trajectory, without smoothing poses or changing mapper/triangulation thresholds.

@@ -65,6 +65,9 @@ Root PRD/ROADMAP/PROGRESS adalah pointer kompatibilitas. Hasil eksperimen lama d
 - [x] Bandingkan kamera 4 fps penuh, overlap 64, resolusi SIFT 1600/8192 fitur: registrasi naik 73,7% → 82,5%, largest-map share 15,7% → 28,7%. Kandidat dense selesai tanpa mengubah produk lama.
 - [x] Gabungkan dua world dari kandidat dense melalui 20 shared cameras dengan 6 kamera validasi. `lantai3_aligned_1026/v001` membawa architecture GLB/denah/HTML, seluruh 824 viewpoint dan 10 fallback; QA browser lulus. Belum seluruh bangunan, artefak depth masih ada.
 - [x] Uji CPU calibrated-cache pada video pantry–IT: 553/555 frame tetap dalam satu world, seluruh frame pantry/koridor/IT terdaftar, lonjakan terbesar turun 407,72 → 1,44 kali median lintasan. Semua 553 frame undistorted lulus kontrak inference. Ini eksperimen kamera, belum hasil geometri atau fitur kalibrasi otomatis default.
+- [x] Tambahkan scope job `full_traversal` / `single_room` / `connected_area` dengan optional time range, provenance, dashboard selector dan output label. LingBot-Map tetap tidak digunakan.
+- [ ] Jalankan pilot `workshop.MOV` sebagai `single_room`, lalu review mesh, denah, coverage dan HTML secara manual.
+- [ ] Tambahkan bounded window/keyframe/overlap concepts ke orkestrasi hanya jika benchmark single-room/long-sequence menunjukkan manfaat; jangan menyalin model LingBot-Map tanpa adapter dan evaluasi.
 - [ ] Lanjutkan job `lantai2_part4_calib_1026` ketika GPU resmi tersedia, lalu bandingkan mesh, denah, source/render dan alur ruang. Pada checkpoint pencatatan job menunggu resource; cek status live sebelum resume.
 - [ ] Setelah geometri kandidat terbukti, evaluasi integrasi refinement kalibrasi dan pemeriksaan kontinuitas kamera secara bounded untuk video lain; jangan menyamakan residual/coverage tinggi dengan tata ruang yang benar.
 - [ ] Bangun korespondensi gambar/PnP antar-world bila kamera tetap terpecah; validasi residual serta geometrinya sebelum gabungan.

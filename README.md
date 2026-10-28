@@ -14,7 +14,7 @@ Checkpoint source: [CHANGELOG.md](CHANGELOG.md). Untuk checkout baru, ikuti [SET
 rtk proxy .venv/bin/python scripts/serve_dashboard.py
 ```
 
-Buka **http://127.0.0.1:8765**. ArchiCon memakai dark mode sesuai [DESIGN.md](DESIGN.md): pilih/upload video, beri ID baru, lalu Mulai rekonstruksi. Progress menampilkan stage nyata, log, contact sheet/render setelah tersedia, dan coverage setelah dihitung. Hasil berisi room tour, denah, mesh, laporan, input review manual dan unduhan ZIP.
+Buka **http://127.0.0.1:8765**. ArchiCon memakai dark mode sesuai [DESIGN.md](DESIGN.md): pilih/upload video, beri ID baru, pilih cakupan `Full traversal`, `Single room`, atau `Connected area`, lalu Mulai rekonstruksi. Progress menampilkan stage nyata, log, contact sheet/render setelah tersedia, dan coverage setelah dihitung. Hasil berisi room tour, denah, mesh, laporan, input review manual dan unduhan ZIP. Scope memberi label area dan optional time range; tidak menyatakan kualitas geometri sudah diterima.
 
 Satu controller dashboard aktif pada satu waktu. Browser dapat ditutup tanpa menghentikan controller; jika backend ditutup, jalankan lagi command yang sama untuk monitoring. Worker server terpisah tetap hidup. Jika controller gagal atau menunggu resource, periksa log lalu klik **Lanjutkan proses**. Review tidak dijalankan otomatis dan tidak dikirim ke layanan model. Panduan: [docs/ARCHICON.md](docs/ARCHICON.md).
 
@@ -30,6 +30,8 @@ rtk proxy .venv/bin/python scripts/run_pipeline.py run \
 ```
 
 ID job harus baru,1–32huruf/angka/underscore/hyphen. Jangan memakai reuse-config video acuan untuk rekaman lain. Script memverifikasi SHA input lokal/server dan memakai konfigurasi mesin yang sudah terpasang.
+
+Untuk pilot satu ruang, gunakan profil `configs/pipeline.single-room.yaml` atau pilih **Single room** di dashboard. Profil ini memakai seluruh video sebagai scope default dan memberi label `Workshop`; timestamp opsional hanya tersedia melalui job metadata.
 
 ```bash
 rtk proxy .venv/bin/python scripts/run_pipeline.py status --job-id ruang_rapat_001

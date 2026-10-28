@@ -41,6 +41,12 @@ rtk proxy .venv/bin/python scripts/run_pipeline.py resume --job-id rekaman_baru_
 
 `manual` adalah default dan satu-satunya mode review. `run` membuat job baru; ID yang sudah ada ditolak. `resume` melanjutkan job itu. `--detach` melepas controller setelah worker server dimulai; gunakan `resume` untuk mengambil hasil dan packaging. Putus SSH/laptop tidak menghentikan worker. Lock mencegah dua controller/job yang sama.
 
+### Scope rekonstruksi
+
+Setiap job menyimpan `scope.kind`: `full_traversal` (default lama), `single_room`, atau `connected_area`. Scope `single_room` memproses seluruh input video sebagai satu ruang secara default; `connected_area` cocok untuk lintasan pantry–printer room–stairs. `scope.name` memberi label output. `start_time_seconds` dan `end_time_seconds` opsional membatasi segmen tanpa membuat video turunan; frame di luar rentang tetap tercatat sebagai source accounting dan frame ID in-scope tidak berubah.
+
+Scope diteruskan ke audit, kamera, depth, tour, delivery, laporan coverage dan review packet. Scope tidak mengubah model DA3, parameter TSDF, guard resource atau status `full_room_reconstruction_complete`; gap, holes, skala relatif dan review manual tetap dilaporkan. Dashboard menyediakan selector scope dan field nama/range ketika bukan `full_traversal`.
+
 Profil dense opsional memilih frame asli 4 fps penuh, SIFT longest-edge1600/max8192 dan sequential overlap64, dengan guard resource yang sama. Ini menambah waktu komputasi; tidak memperbaiki blur atau mengisi geometri yang tidak terlihat. Gunakan ID baru:
 
 ```bash
@@ -48,6 +54,8 @@ rtk proxy .venv/bin/python scripts/run_pipeline.py run --input raw_videos/rekama
 ```
 
 Dashboard tetap memakai profil default; contoh di atas adalah pemilihan profil melalui CLI.
+
+Dashboard menyediakan scope `Full traversal`, `Single room`, dan `Connected area`. Pilih `Single room` untuk satu ruangan seperti workshop; pilih `Connected area` untuk beberapa ruang yang dilalui dalam satu loop. Isi nama area dan timestamp hanya jika video memuat bagian di luar area yang ingin diproses. Scope membatasi label/provenance dan frame selection, bukan klaim kelengkapan permukaan.
 
 Video harus selesai ditulis/disalin sebelum `run`. Jika byte video berubah setelah registrasi, checksum gate menghentikan job; gunakan input final dan ID baru.
 
