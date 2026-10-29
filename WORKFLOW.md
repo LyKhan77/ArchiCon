@@ -165,6 +165,8 @@ Pengguna memulai review saat diperlukan. Setelah JSON disimpan sesuai schema:
 rtk proxy .venv/bin/python scripts/run_pipeline.py apply-review --job-id rekaman_baru_001 --review-file outputs/jobs/rekaman_baru_001/review/manual.json
 ```
 
+Untuk keputusan global sederhana, gunakan sesi **Review hasil** pada Tab Hasil akhir. Pilih `Accept`, `Need review`, atau `Reject / perlu rekaman ulang`, lalu simpan keputusan. Reject membutuhkan alasan dan dipetakan ke `needs_capture`; Accept dengan gap coverage menghasilkan `accepted_partial`. Sesi web tidak menyediakan findings per komponen atau refinement; gunakan JSON/CLI di atas untuk review detail.
+
 JSON harus merujuk job, ronde, fingerprint, component ID, timestamp dan path bukti yang tepat. Bukti/bundle/produk yang berubah ditolak. Keputusan: `accept`, `refine`, `needs_capture`, `needs_human_review`. Reviewer tidak dapat mengarang meter, menyatakan semua interior lengkap atau menjalankan shell bebas.
 
 | Aksi refinement | Stage | Kandidat |

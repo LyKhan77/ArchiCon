@@ -89,6 +89,25 @@
         <div id="output-content" hidden>
           <div class="section-intro status-intro"><div><p class="eyebrow">Hasil rekonstruksi</p><h2>Jelajahi ruang Anda.</h2><p id="scope-label" class="helper"></p></div><a id="download-package" class="button primary" href="#">Unduh paket <span aria-hidden="true">↓</span></a></div>
           <div id="review-note" class="review-note"><strong>Menunggu review manual</strong><span>Komputasi selesai. Kualitas geometri dan kelengkapan ruang perlu diperiksa.</span></div>
+          <section id="review-session" class="review-session" hidden aria-labelledby="review-session-title">
+            <div class="review-session-heading"><div><p class="eyebrow">Sesi review</p><h3 id="review-session-title">Keputusan hasil</h3><p id="review-session-summary" class="helper"></p></div><span id="review-session-status" class="status-label">Menunggu keputusan</span></div>
+            <div class="review-session-grid">
+              <div><h4 class="block-heading">Bukti tersedia</h4><p id="review-coverage" class="helper"></p><div id="review-evidence" class="review-evidence"></div></div>
+              <form id="review-form" class="review-form">
+                <fieldset><legend>Keputusan global</legend>
+                  <label class="review-choice"><input type="radio" name="review-decision" value="accept"><span><strong>Accept</strong><small>Terima hasil untuk penggunaan saat ini.</small></span></label>
+                  <label class="review-choice"><input type="radio" name="review-decision" value="needs_review"><span><strong>Need review</strong><small>Simpan sebagai belum diputuskan.</small></span></label>
+                  <label class="review-choice"><input type="radio" name="review-decision" value="reject"><span><strong>Reject / perlu rekaman ulang</strong><small>Hasil membutuhkan capture tambahan.</small></span></label>
+                </fieldset>
+                <label class="field-label" for="review-reason">Alasan <span class="helper">(wajib untuk Reject)</span></label>
+                <textarea id="review-reason" rows="4" maxlength="2000" placeholder="Catatan singkat untuk keputusan review"></textarea>
+                <p id="review-validation" class="inline-notice" hidden></p>
+                <p id="review-partial-note" class="helper" hidden>Coverage memiliki gap; Accept akan disimpan sebagai accepted_partial.</p>
+                <button type="submit" id="submit-review" class="button primary">Simpan keputusan <span aria-hidden="true">→</span></button>
+              </form>
+            </div>
+            <div id="review-applied" class="review-applied" hidden><strong>Keputusan tersimpan.</strong><span id="review-applied-detail"></span></div>
+          </section>
           <div class="output-toolbar"><div><button id="show-tour" class="text-button selected">Room tour</button><button id="show-plan" class="text-button">Denah 2D</button></div><a id="open-tour" href="#" target="_blank" rel="noopener">Buka HTML ↗</a></div>
           <iframe id="tour-frame" title="Room tour ArchiCon" loading="lazy" allow="fullscreen" hidden></iframe>
           <div id="plan-grid" class="plan-grid" hidden></div>
