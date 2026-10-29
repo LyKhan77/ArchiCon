@@ -108,6 +108,21 @@ function renderProgress(){
   $('process-log').textContent=job.log.trim()||'Belum ada log.';
 }
 function outputMode(mode){state.outputTab=mode;$('show-tour').classList.toggle('selected',mode==='tour');$('show-plan').classList.toggle('selected',mode==='plan');$('tour-frame').hidden=mode!=='tour';$('plan-grid').hidden=mode!=='plan';}
+function reviewDecision(){return document.querySelector('input[name="review-decision"]:checked')?.value||'';}
+function renderReviewSession(){
+  const review=state.job?.review;const panel=$('review-session');
+  if(!review?.available){panel.hidden=true;return;}
+  panel.hidden=false;
+  const gaps=review.coverage?.gaps?.length||0;const applied=!!review.applied;
+  $('review-session-status').textContent=applied?'Keputusan tersimpan':'Menunggu keputusan';
+  $('review-session-status').className='status-label '+(applied?'completed':'');
+  $('review-session-summary').textContent=`${review.component_count||0} komponen · ${gaps} gap kamera · keputusan global`;
+  $('review-coverage').textContent=gaps?`${gaps} gap terdeteksi. Accept akan menjadi accepted_partial.`:'Tidak ada gap kamera pada laporan coverage.';
+  const links=(review.evidence||[]).slice(0,12);
+  $('review-evidence').innerHTML=links.length?links.map(path=>`<a href="${artifact(state.job.job_id,path)}" target="_blank" rel="noopener">${esc(path.split('/').slice(-2).join(' / '))} ↗</a>`).join(''):'<span class="helper">Bukti preview belum tersedia.</span>';
+  $('review-form').hidden=applied;$('review-applied').hidden=!applied;$('review-partial-note').hidden=applied||!gaps;
+  if(applied){$('review-applied-detail').textContent=`Status kualitas: ${review.quality_status||'unassessed'} · delivery: ${review.delivery||'—'}`;}
+}
 function renderOutput(){
   const job=state.job;const ready=!!job?.delivery;$('output-empty').hidden=ready;$('output-content').hidden=!ready;if(!ready)return;
   const scopeNames={full_traversal:'Full traversal',single_room:'Single room',connected_area:'Connected area'};
@@ -125,6 +140,7 @@ function renderOutput(){
     $('plan-grid').innerHTML=plans.map(p=>`<figure class="preview-figure"><img src="${artifact(job.job_id,p.path)}" alt="Estimasi denah ${esc(p.name)}"><figcaption>${esc(p.name)} · skala ${esc(job.scale_status)}</figcaption></figure>`).join('')||'<p class="muted">Denah belum tersedia.</p>';
     $('download-list').innerHTML=job.downloads.map(f=>`<a href="${artifact(job.job_id,f.path,true)}"><span>${esc(f.name)}<small>${esc(f.path.includes('/mesh/')?'Mesh detail':f.path.includes('/denah/')?'Estimasi denah':f.kind==='review'?'Input review manual':f.path.includes('/reports/')?'Laporan':'Artefak hasil')}</small></span><span aria-hidden="true">↓</span></a>`).join('');
   }
+  renderReviewSession();
   outputMode(state.outputTab);
 }
 async function selectJob(jid){
@@ -165,6 +181,16 @@ $('cancel-upload').addEventListener('click',()=>state.upload?.abort());$('dismis
 $('job-list').addEventListener('click',event=>{const button=event.target.closest('[data-job]');if(button)selectJob(button.dataset.job).catch(error=>notify(error.message));});
 for(const button of document.querySelectorAll('[data-tab]')){button.addEventListener('click',()=>tab(button.dataset.tab));button.addEventListener('keydown',event=>{const items=[...document.querySelectorAll('[data-tab]')];const i=items.indexOf(button);let target;if(event.key==='ArrowRight')target=items[(i+1)%items.length];if(event.key==='ArrowLeft')target=items[(i+items.length-1)%items.length];if(event.key==='Home')target=items[0];if(event.key==='End')target=items.at(-1);if(target){event.preventDefault();tab(target.dataset.tab);target.focus();}});}
 $('resume-job').addEventListener('click',async()=>{try{$('resume-job').disabled=true;await api('/api/jobs/'+encodeURIComponent(state.selected)+'/resume',{method:'POST'});await poll();}catch(error){notify(error.message);$('resume-job').disabled=false;}});
+$('review-form').addEventListener('submit',async event=>{
+  event.preventDefault();const decision=reviewDecision();const reason=$('review-reason').value.trim();
+  $('review-validation').hidden=true;
+  if(!decision){$('review-validation').textContent='Pilih satu keputusan terlebih dahulu.';$('review-validation').hidden=false;return;}
+  if(decision==='reject'&&!reason){$('review-validation').textContent='Alasan wajib untuk Reject / perlu rekaman ulang.';$('review-validation').hidden=false;return;}
+  const button=$('submit-review');button.disabled=true;state.submitting=true;
+  try{await api('/api/jobs/'+encodeURIComponent(state.selected)+'/review',{method:'POST',body:JSON.stringify({decision,reason})});await poll();renderOutput();}
+  catch(error){$('review-validation').textContent=error.message;$('review-validation').hidden=false;}
+  finally{state.submitting=false;button.disabled=false;}
+});
 $('show-tour').addEventListener('click',()=>outputMode('tour'));$('show-plan').addEventListener('click',()=>outputMode('plan'));
 $('scope-kind').addEventListener('change',updateScopeFields);
 async function init(){
