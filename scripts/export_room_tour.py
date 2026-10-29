@@ -55,7 +55,11 @@ def export_limitations(config,components):
             f'{processed} dari {attempted} keyframe diproses; {len(coverage.get("gaps",[]))} keyframe belum memiliki geometri. Bagian tak terlihat belum direkonstruksi.',
             'HTML memakai mesh yang diringankan; geometri asli tetap tersedia dalam GLB penuh.',
             'Arah atas dan bidang lantai diperkirakan; belum survei dimensi atau denah arsitektur.']
-    if len(components)>1:result.append('Komponen terpisah belum disejajarkan; posisi dan skalanya tidak boleh digabung.')
+    if len(components)>1:
+        if config.get('global_architecture', {}).get('component'):
+            result.append('Arsitektur gabungan hanya memuat world yang lolos alignment kamera. Area lokal tetap tersedia untuk inspeksi; world fallback belum tersambung.')
+        else:
+            result.append('Komponen terpisah belum disejajarkan; posisi dan skalanya tidak boleh digabung.')
     if any(c.get('floor_supported') is False for c in components):
         result.append('Sebagian komponen tidak memiliki bukti lantai horizontal; irisan memakai referensi bawah geometri yang belum tervalidasi.')
     result.extend(config.get('limitations',[]))

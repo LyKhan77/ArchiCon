@@ -32,13 +32,14 @@ Dashboard memerlukan backend lokal yang aktif. **Room tour hasil ekspor** adalah
 | Backend web | Python 3.12 stdlib `ThreadingHTTPServer` | HTTP localhost, upload/file streaming, byte range video, ZIP, Host/origin/token; [dashboard_http.py](../src/room_reconstruction/dashboard_http.py), [dashboard_service.py](../src/room_reconstruction/dashboard_service.py) |
 | Orchestration | Python 3.12, PyYAML, subprocess, JSON, SHA-256, `fcntl.flock` | Registrasi, controller/worker detached, resume, pengunci, attempt immutable dan provenance; [pipeline_cli.py](../src/room_reconstruction/pipeline_cli.py), [pipeline_state.py](../src/room_reconstruction/pipeline_state.py) |
 | Transport | OpenSSH dan rsync | Source allowlist, input video, bundle/artefak terverifikasi; tanpa `--delete` |
-| Audit video | FFmpeg/ffprobe, OpenCV, NumPy | Metadata/durasi/PTS/rotasi, pemilihan frame dan contact sheet; [ingestion.py](../src/room_reconstruction/ingestion.py) |
-| Kamera | PyCOLMAP 4.2.1, CPU SIFT, matching, incremental SfM/bundle adjustment, undistortion | Pose dan intrinsics per komponen; [reconstruct_full_cameras.py](../scripts/reconstruct_full_cameras.py) |
+| Audit video | FFmpeg/ffprobe, OpenCV, NumPy | Metadata/durasi/PTS/rotasi, sharpness, normalized inter-frame motion, uniform/adaptive keyframe selection dan contact sheet; [ingestion.py](../src/room_reconstruction/ingestion.py) |
+| Kamera | PyCOLMAP 4.2.1, CPU SIFT, sequential/exhaustive matching, optional loop closure, incremental SfM/bundle adjustment, undistortion | Pose dan intrinsics per komponen; [reconstruct_full_cameras.py](../scripts/reconstruct_full_cameras.py) |
 | Depth | Depth Anything 3 LARGE, PyTorch/CUDA, NumPy float32 | Inference per window dengan kamera terverifikasi; [run_full_depth.py](../scripts/run_full_depth.py), [full_take.py](../src/room_reconstruction/full_take.py) |
 | Mask orang | TorchVision SSDLite320 MobileNetV3 Large COCO, CPU | Bounding box orang + anotasi per-frame yang terikat image hash; [build_full_surface.py](../scripts/build_full_surface.py) |
 | Filtering | NumPy, OpenCV, modul proyek | Validity/confidence, diskontinuitas depth, mask, occlusion dan multi-view consistency; [filtering.py](../src/room_reconstruction/filtering.py) |
 | Mesh | Open3D 0.19.0 CPU `ScalableTSDFVolume`, Trimesh 5.1.1 | Integrasi depth, triangle mesh, PLY/GLB dan transform display; [meshing.py](../src/room_reconstruction/meshing.py) |
 | Render QA | Triangle raycasting Open3D, NumPy, Pillow, FFmpeg | Perbandingan source/render, overview dan lintasan; [mesh_audit.py](../src/room_reconstruction/mesh_audit.py), [render_full_surface.py](../scripts/render_full_surface.py) |
+| Global architecture | NumPy Umeyama Sim(3), camera validation, deterministic graph, Trimesh GLB | S06G: gabungan world yang terhubung ke root; [alignment.py](../src/room_reconstruction/alignment.py), [global_architecture.py](../src/room_reconstruction/global_architecture.py). Fallback eksplisit; belum global TSDF atau image-only bridge |
 | Denah | NumPy irisan horizontal, OpenCV raster/Hough, SVG/PNG | Estimasi lantai, bukti tiga irisan dan kandidat garis; [floorplan.py](../src/room_reconstruction/floorplan.py), [export_room_tour.py](../scripts/export_room_tour.py) |
 | Room tour | Three.js 0.186.1, GLTFLoader, OrbitControls, WebGL, HTML/CSS/JS | Workspace arsitektur/interior dark mode, navigasi komponen, roof clipping, recorded viewpoints/playback, denah dan kalibrasi; [web/tour](../web/tour/), [panduan](ROOM_TOUR.md) |
 | Packaging web | Node.js, npm, esbuild 0.28.2 | Menanam JavaScript, data, CSS, GLB, bukti denah serta font Plex WOFF2/lisensi OFL ke satu HTML; [web/build.mjs](../web/build.mjs) |
@@ -65,8 +66,10 @@ Open3D 0.19 dipertahankan karena fixture TSDF float32 pada eksperimen proyek gag
 
 - Model aktif: `depth-anything/DA3-LARGE`, revision `c54c26b16ec04d218e8d584ecf4bce082a9fcc20`, bobot lokal `model.safetensors` 1.643.843.860 byte. Registry: [configs/models.yaml](../configs/models.yaml). Source DA3 berasal dari vendor server; run merekam source/API/weights hashes.
 - Inference memakai `w2c` dan intrinsics dari kamera undistorted, `align_to_input_ext_scale=True`, `infer_gs=False`, referensi `first`, window maksimal 16 view/stride 12, process resolution 504. Hasil tetap optical-axis Z-depth dalam unit scene relatif; resolusi output mengikuti rasio gambar dan resize model.
-- Sampling default sekitar 2 keyframe/detik, memilih frame tajam per temporal window. Kapasitas frame dihitung dari durasi input; angka 302 khusus video acuan, bukan konstanta untuk semua rekaman.
-- Matcher `auto`: exhaustive untuk ≤400 keyframe aktual, sequential di atasnya; override tersedia lewat konfigurasi pipeline. Kesuksesan matching/registrasi tetap bergantung pada rekaman.
+- Sampling default memakai base 2 keyframe/detik dan adaptive 4 keyframe/detik pada interval dengan normalized inter-frame motion di atas threshold 0,03. Semua frame tetap berasal dari video asli; frame sintetis tidak dibuat. Kapasitas frame dihitung dari durasi dan high-motion rate; angka 302 khusus video acuan, bukan konstanta untuk semua rekaman.
+- Profil room-tour memakai sequential overlap 32. Loop closure bersifat optional dan hanya aman bila `vocab_tree_path` menunjuk ke vocabulary tree lokal; pipeline offline tidak mengunduh asset. Matcher `auto` tetap tersedia: exhaustive untuk ≤400 keyframe aktual, sequential di atasnya. Kesuksesan matching/registrasi tetap bergantung pada rekaman; sampling lebih rapat tidak memulihkan frame yang sudah blur.
+- Global alignment memakai minimal enam shared frame-ID dengan fit/validation terpisah, center error maksimal 2% bentang shared trajectory dan error orientasi maksimal 3°. Degeneracy dan cycle conflict ditolak. Transform mesh mengompensasi `world_to_viewer` tiap area; warna asli dipertahankan. Kandidat global tetap relatif dan belum dinyatakan akurat/lengkap.
+- Profil CLI opsional [pipeline.dense.yaml](../configs/pipeline.dense.yaml): 4 fps uniform dari frame asli, sequential overlap64, SIFT longest-edge1600/max8192. Uji kamera pada video yang sama menaikkan registrasi 370/502 menjadi 824/999, world diterima 18 menjadi 16, dan porsi world terbesar 15,7% menjadi 28,7% dari frame audit. Ini perbandingan sampling berbeda dan bukan bukti kualitas permukaan atau skala meter; kebutuhan waktu/storage bertambah.
 - Default confidence quantile 0,02; voxel length dari median depth/80, SDF truncation 8 voxel. Unit voxel bukan sentimeter sebelum kalibrasi nyata.
 - Detektor orang memakai checkpoint lokal SSDLite COCO dengan SHA-256 terikat. Kaca/objek bergerak tidak otomatis termask sempurna; anotasi baru dimulai `unreviewed`.
 - Refinement manual dibatasi maksimal 2 ronde × 2 kandidat dengan preset S06/S07 yang dikenal; tidak mengganti kamera atau model secara bebas.
@@ -77,7 +80,7 @@ Sumber parameter: [configs/pipeline.yaml](../configs/pipeline.yaml), [pipeline_s
 
 Laptop menangani input, transfer, monitoring, HTML build, browser QA dan review. Server menangani komputasi audit/kamera/depth/geometri. Profil: paths.local.yaml (`../configs/paths.local.yaml`, lokal), paths.server.yaml (`../configs/paths.server.yaml`, lokal).
 
-Server yang telah diaudit memiliki dua RTX 5080; pipeline hanya memakai UUID GPU0 yang disimpan pada profil mesin privat, yang menjadi logical `cuda:0` setelah isolasi. GPU lain tidak dipilih. Audit/kamera/geometri berjalan pada CPU dengan CUDA disembunyikan.
+Server yang telah diaudit memiliki dua RTX 5080; pipeline hanya memakai satu UUID GPU yang diizinkan pada profil mesin privat, yang menjadi logical `cuda:0` setelah isolasi. Index fisik dapat berbeda; GPU lain tidak dipilih. Audit/kamera/geometri berjalan pada CPU dengan CUDA disembunyikan.
 
 | Guard saat ini | Batas |
 |---|---|

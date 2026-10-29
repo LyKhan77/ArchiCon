@@ -14,6 +14,7 @@ import subprocess
 
 from .provenance import sha256_file
 from .pipeline_layout import resolve_run_dir,run_index_path,job_asset
+from .scope import normalize_scope
 
 
 class ComponentDataError(ValueError):
@@ -115,14 +116,29 @@ def camera_matching_mode(processing,frame_count):
     return ('exhaustive' if frame_count<=budget else 'sequential') if mode=='auto' else mode
 
 
-def capture_config(video, digest, duration, fps=2.0):
+def capture_config(video, digest, duration, fps=2.0, *, sampling_mode='uniform',
+                   adaptive_target_fps=None, motion_threshold=.03, scope=None):
     duration, fps = float(duration), float(fps)
     if not all(math.isfinite(v) and v > 0 for v in (duration, fps)) or fps > 10:
         raise ValueError('Positive duration and target FPS <= 10 required')
-    return dict(schema_version=1, input_video=str(video),
+    if sampling_mode not in ('uniform', 'adaptive'):
+        raise ValueError('Sampling mode must be uniform or adaptive')
+    if adaptive_target_fps is not None:
+        adaptive_target_fps = float(adaptive_target_fps)
+        if not math.isfinite(adaptive_target_fps) or adaptive_target_fps < fps or adaptive_target_fps > 10:
+            raise ValueError('Adaptive target FPS must be finite, >= base FPS and <= 10')
+    motion_threshold = float(motion_threshold)
+    if not math.isfinite(motion_threshold) or not 0 <= motion_threshold <= 1:
+        raise ValueError('Motion threshold must be finite and in [0, 1]')
+    normalized_scope = normalize_scope(scope, duration_seconds=duration)
+    return dict(schema_version=1, input_video=str(video), scope=normalized_scope,
                 verified_metadata=dict(sha256=digest, duration_seconds=duration),
-                sampling=dict(target_fps=fps, max_keyframes=math.ceil(duration * fps) + 4,
-                              selection='sharpest_per_temporal_window', preserve_low_texture_continuity=True))
+                sampling=dict(target_fps=fps, max_keyframes=math.ceil(duration * (adaptive_target_fps or fps)) + 4,
+                              mode=sampling_mode, adaptive_target_fps=adaptive_target_fps,
+                              motion_threshold=motion_threshold,
+                              selection=('sharpest_per_motion_adaptive_window' if sampling_mode == 'adaptive'
+                                         else 'sharpest_per_temporal_window'),
+                              preserve_low_texture_continuity=True))
 
 
 def annotation_config(frames):
@@ -137,10 +153,13 @@ def stage_command(root, stage, **params):
                    depth=('.venv-inference', 'run_full_depth.py'),
                    surface=('.venv-geometry', 'build_full_surface.py'),
                    render=('.venv-geometry', 'render_full_surface.py'),
+                   architecture=('.venv-geometry', 'build_global_architecture.py'),
                    tour=('.venv-geometry', 'export_room_tour.py'))
     runtime, script = scripts[stage]
     command = [str(root / runtime / 'bin/python'), str(root / 'scripts' / script), '--run-id', '@RUN_ID@']
     for name, value in params.items():
+        if value is None:
+            continue
         if isinstance(value, bool):
             if value: command.append('--' + name.replace('_', '-'))
         else:
@@ -275,7 +294,7 @@ def _coverage(audit, selected):
 
 def _tour_config(job, components, coverage):
     return dict(title=job.get('title', Path(job['input_video']).stem + ' · ruang dan lintasan'),
-                source=job['input_video'], components=components, coverage=coverage,
+                source=job['input_video'], scope=job.get('scope'), components=components, coverage=coverage,
                 viewer_voxel_divisor=job.get('processing', {}).get('viewer_voxel_divisor', 450),
                 limitations=[f"{coverage['processed']} dari {coverage['attempted']} keyframe diproses; "
                              f"{len(coverage['gaps'])} keyframe belum memiliki geometri.",
@@ -308,8 +327,18 @@ def _sample(values, count):
     return [values[round(i * (len(values) - 1) / (count - 1))] for i in range(count)] if count > 1 else values[:count]
 
 
-def _bundle_files(root, audit, tour, components, selected):
-    required = {p for p in _validate_tour(root, tour, components) if not p.name.endswith("-sections.json")}
+def _tour_components(components, global_component=None):
+    if not global_component:
+        return components
+    merged = set(global_component['source_component_ids'])
+    if len(merged) < 2 or not merged <= {row['id'] for row in components}:
+        raise ValueError('Global tour components must reference validated local worlds')
+    return [global_component] + [row for row in components if row['id'] not in merged]
+
+
+def _bundle_files(root, audit, tour, components, selected, global_component=None):
+    tour_components = _tour_components(components, global_component)
+    required = {p for p in _validate_tour(root, tour, tour_components) if not p.name.endswith("-sections.json")}
     required.update(tour / name for name in ("status.json", "manifest.json", "tour-data.json"))
     if (tour / "report.json").is_file(): required.add(tour / "report.json")
     required.update(audit / name for name in ("status.json", "frame_manifest.json", "audit_report.json"))
@@ -375,6 +404,52 @@ def _bundle_files(root, audit, tour, components, selected):
     return artifacts, [str(p.relative_to(root)) for p in qa], evidence
 
 
+def _global_stage(root, job_dir, job, components, runner, common):
+    config = job_asset(root, job_dir, 'config', 'global-architecture.json')
+    inputs = sorted({_local(root, row[key], outputs=True) for row in components
+                     for key in ('mesh', 'cameras', 'render_manifest')})
+    root_id = ('main' if any(row['id'] == 'main' for row in components) else
+               min(components, key=lambda row: (-len(_json(root / row['cameras'])['frames']), row['id']))['id'])
+    _write(config, dict(schema_version=1, input_sha256=job['input_sha256'], components=components, root_component=root_id,
+        artifacts=[dict(file=str(path.relative_to(root)), sha256=sha256_file(path), size_bytes=path.stat().st_size)
+                   for path in inputs]))
+    params = dict(config=str(config.relative_to(root)))
+    run = runner.run('S06G_global', [config, *inputs], params, stage_command(root, 'architecture', **params),
+                     expected=('report.json', 'products/alignment.json', 'products/manifest.json'), **common)
+    _status(run, 'global_architecture', 'complete')
+    report = _json(run / 'report.json'); products = run / 'products'
+    manifest = _json(products / 'manifest.json')
+    if manifest.get('input_sha256') != job['input_sha256'] or manifest.get('input_hashes') != {
+            str(path.relative_to(root)): sha256_file(path) for path in inputs}:
+        raise ValueError('Global architecture input fingerprint differs')
+    paths = _artifacts(products, manifest['artifacts'])
+    if report != _json(products / 'report.json'):
+        # CLI also records the relative products subdirectory.
+        if {key: value for key, value in report.items() if key != 'products'} != _json(products / 'report.json'):
+            raise ValueError('Global architecture reports differ')
+    status, component = report['status'], report['component']
+    if status not in ('no_alignment', 'aligned_partial'):
+        raise ValueError('Unknown global alignment status')
+    if (status == 'no_alignment') != (component is None):
+        raise ValueError('Architecture mesh/status contradiction')
+    if component:
+        if component.get('id') != 'architecture' or len(report['aligned_components']) < 2:
+            raise ValueError('Global architecture requires multiple validated worlds')
+        if set(component.get('source_component_ids', [])) != set(report['aligned_components']):
+            raise ValueError('Global mesh component membership differs from alignment report')
+        for key in ('mesh', 'cameras', 'render_manifest'):
+            if _local(root, component[key], outputs=True) not in paths:
+                raise ValueError('Architecture component artifact is not hash-bound')
+    descriptor = dict(status=status, run_id=run.name, component=component,
+        root_component=report.get('root_component'),
+        aligned_components=report['aligned_components'], fallback_components=report['fallback_components'],
+        alignment=str((products / 'alignment.json').relative_to(root)))
+    paths.extend([products / 'manifest.json', run / 'status.json', run / 'report.json'])
+    artifacts = [dict(file=str(path.relative_to(root)), sha256=sha256_file(path), size_bytes=path.stat().st_size)
+                 for path in sorted(set(paths))]
+    return descriptor, artifacts
+
+
 def run_server(root, job_dir, job, runner):
     root, job_dir = Path(root).resolve(), Path(job_dir).resolve()
     if not job_dir.is_relative_to(root / 'outputs'): raise ValueError('Job must remain within outputs')
@@ -398,7 +473,11 @@ def run_server(root, job_dir, job, runner):
                                 capture_output=True, text=True, check=True, timeout=60)
         duration = float(json.loads(result.stdout)['format']['duration'])
         capture = job_asset(root,job_dir,'config','capture.json')
-        _write(capture, capture_config(job['input_video'], job['input_sha256'], duration, processing.get('target_fps', 2)))
+        _write(capture, capture_config(
+            job['input_video'], job['input_sha256'], duration, processing.get('target_fps', 2),
+            sampling_mode=processing.get('sampling_mode', 'uniform'),
+            adaptive_target_fps=processing.get('adaptive_target_fps'),
+            motion_threshold=processing.get('motion_threshold', .03), scope=job.get('scope')))
         params = dict(capture=str(capture.relative_to(root)), threads=4)
         audit = runner.run('S02_audit', [video, capture], params, stage_command(root, 'audit', **params),
                            expected=('frame_manifest.json', 'audit_report.json'), **common)
@@ -409,7 +488,10 @@ def run_server(root, job_dir, job, runner):
         camera = _run(root, reuse['camera_run'])
     else:
         params = dict(audit_run=audit.name, config=config, threads=4,
-                      matching=camera_matching_mode(processing,len(_json(audit/'frame_manifest.json')['frames'])), overlap=processing.get('overlap', 16),
+                      matching=camera_matching_mode(processing,len(_json(audit/'frame_manifest.json')['frames'])),
+                      overlap=processing.get('overlap', 16),
+                      loop_detection=processing.get('loop_detection', False),
+                      vocab_tree_path=processing.get('vocab_tree_path'),
                       max_image_size=processing.get('max_image_size', 960), max_features=processing.get('max_features', 4096))
         camera = runner.run('S03_camera', [audit, root / config], params, stage_command(root, 'camera', **params),
                             expected=('report.json', 'manifest.json'), **common)
@@ -483,28 +565,42 @@ def run_server(root, job_dir, job, runner):
     if not components:
         reasons = '; '.join(f"{row['id']}: {row['reason']}" for row in failed_components)
         raise ComponentDataError('No valid component remains; see component-failures.json. ' + reasons)
+    global_info, global_artifacts = None, []
+    if processing.get('global_alignment', False):
+        global_info, global_artifacts = _global_stage(root, job_dir, job, components, runner, common)
+    global_component = global_info['component'] if global_info else None
     if failed_components: reuse.pop('tour_run', None)
+    if global_component: reuse.pop('tour_run', None)
     if reuse.get('tour_run'):
         tour = _run(root, reuse['tour_run'])
     else:
         tour_config = job_asset(root,job_dir,'config','tour-config.json')
-        _write(tour_config, _tour_config(job, components, coverage))
+        tour_components = _tour_components(components, global_component)
+        config_data = _tour_config(job, tour_components, coverage)
+        if global_info:
+            config_data['global_architecture'] = global_info
+        _write(tour_config, config_data)
         params = dict(config=str(tour_config.relative_to(root)))
-        inputs = [tour_config] + [_local(root, row[k], outputs=True) for row in components for k in ('mesh', 'render_manifest', 'cameras')]
+        inputs = [tour_config] + [_local(root, row[k], outputs=True) for row in tour_components for k in ('mesh', 'render_manifest', 'cameras')]
         tour = runner.run('S07_tour', inputs, params, stage_command(root, 'tour', **params),
                           expected=('tour-data.json', 'manifest.json'), **common)
-    artifacts, qa, evidence = _bundle_files(root, audit, tour, components, successful)
+    artifacts, qa, evidence = _bundle_files(root, audit, tour, components, successful, global_component)
+    inventory = {item['file']: item for item in artifacts + global_artifacts}
+    artifacts = [inventory[key] for key in sorted(inventory)]
     # Resolver metadata is part of the verified transfer, so laptop packaging
     # can locate nested stages without server-specific absolute paths.
     run_ids={audit.name,camera.name,tour.name}
+    if global_info: run_ids.add(global_info['run_id'])
     run_ids.update(row[key] for row in components for key in ('depth_run','surface_run','render_run'))
     for identifier in sorted(run_ids):
         index=run_index_path(root,identifier)
         if index.is_file():
             artifacts.append(dict(file=str(index.relative_to(root)),sha256=sha256_file(index),size_bytes=index.stat().st_size))
     bundle = dict(schema_version=1, job_id=job['job_id'], input_sha256=job['input_sha256'],
+                  scope=job.get('scope'),
                   audit_run=audit.name, camera_run=camera.name, coverage=coverage, components=components,
                   tour_run=tour.name, artifacts=artifacts, qa=qa, qa_component_evidence=evidence)
     if failed_components: bundle['failed_components'] = failed_components
+    if global_info: bundle['global_architecture'] = global_info
     _write(job_dir / 'bundle.json', bundle)
     return bundle

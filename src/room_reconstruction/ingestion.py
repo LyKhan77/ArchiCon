@@ -15,6 +15,7 @@ import cv2
 import numpy as np
 
 from .provenance import sha256_file, write_json
+from .scope import normalize_scope
 
 
 def _json_command(args: list[str]) -> dict:
@@ -79,6 +80,30 @@ def choose_best_frames(rows: list[dict], target_fps: float, max_keyframes: int) 
     return selected
 
 
+def choose_adaptive_frames(rows: list[dict], base_fps: float, high_fps: float,
+                           motion_threshold: float, max_keyframes: int) -> list[dict]:
+    """Select original frames densely only in intervals with measured motion."""
+    values = (base_fps, high_fps, motion_threshold)
+    if (not all(math.isfinite(value) for value in values) or base_fps <= 0
+            or high_fps < base_fps or not 0 <= motion_threshold <= 1
+            or max_keyframes < 2):
+        raise ValueError("Adaptive sampling requires valid rates, threshold and max_keyframes")
+    windows: dict[tuple[float, int], dict] = {}
+    for row in rows:
+        motion = float(row.get("motion_score", 0.0))
+        if not math.isfinite(motion) or not 0 <= motion <= 1:
+            raise ValueError("Motion scores must be finite values in [0, 1]")
+        rate = high_fps if motion >= motion_threshold else base_fps
+        key = (rate, math.floor((row["timestamp_seconds"] + 1e-9) * rate))
+        if key not in windows or row["sharpness"] > windows[key]["sharpness"]:
+            windows[key] = row
+    selected = sorted(windows.values(), key=lambda row: (row["timestamp_seconds"], row["source_index"]))
+    if len(selected) > max_keyframes:
+        indices = np.linspace(0, len(selected) - 1, max_keyframes).round().astype(int)
+        selected = [selected[int(index)] for index in indices]
+    return selected
+
+
 def assign_splits(times: list[float], seed: int, validation_fraction: float,
                   block_seconds: float = 2.0) -> list[str]:
     if not 0 < validation_fraction < 1 or block_seconds <= 0:
@@ -107,6 +132,7 @@ def _scan(video: Path, run: Path, times: list[float], display: list[int],
     rows = []
     best_row = best_image = None
     previous_window = None
+    previous_gray = None
 
     def save_best() -> None:
         if best_row is not None:
@@ -128,10 +154,13 @@ def _scan(video: Path, run: Path, times: list[float], display: list[int],
                     raise ValueError("Decoder frame count or dimensions disagree with ffprobe")
                 image = np.frombuffer(raw, dtype=np.uint8).reshape(height, width, 3)
                 gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+                motion_score = 0.0 if previous_gray is None else float(
+                    cv2.absdiff(gray, previous_gray).mean() / 255.0)
                 row = {"source_index": index, "timestamp_seconds": times[index],
                        "sharpness": float(cv2.Laplacian(gray, cv2.CV_64F).var()),
                        "mean_luma": float(gray.mean()), "dark_fraction": float((gray < 8).mean()),
                        "bright_fraction": float((gray > 247).mean()),
+                       "motion_score": motion_score,
                        "thumbnail_path": f"review/thumbnails/frame_{index:06d}.jpg"}
                 quality.write(json.dumps(row, allow_nan=False) + "\n")
                 rows.append(row)
@@ -142,6 +171,7 @@ def _scan(video: Path, run: Path, times: list[float], display: list[int],
                     previous_window = window
                 elif row["sharpness"] > best_row["sharpness"]:
                     best_row, best_image = row, image.copy()
+                previous_gray = gray
                 index += 1
                 if index % 1500 == 0:
                     print(f"Audited {index}/{len(times)} source frames", file=sys.stderr, flush=True)
@@ -166,7 +196,20 @@ def _contact_sheets(run: Path, rows: list[dict], prefix: str) -> list[str]:
     for offset in range(0, len(rows), 12):
         canvas = np.full((3 * (height + label), 4 * width, 3), 245, np.uint8)
         for cell, row in enumerate(rows[offset:offset + 12]):
-            image = cv2.imread(str(run / row["thumbnail_path"]))
+            thumbnail = run / row["thumbnail_path"]
+            image = cv2.imread(str(thumbnail))
+            if image is None and row.get("image_path"):
+                # A single review thumbnail can be lost on a busy remote filesystem;
+                # the extracted keyframe remains the authoritative source image.
+                fallback = cv2.imread(str(run / row["image_path"]))
+                if fallback is not None:
+                    factor = min(1.0, 512 / max(fallback.shape[:2]))
+                    if factor < 1.0:
+                        fallback = cv2.resize(fallback, (round(fallback.shape[1] * factor),
+                                                         round(fallback.shape[0] * factor)))
+                    if not cv2.imwrite(str(thumbnail), fallback):
+                        raise RuntimeError("Cannot recover missing review thumbnail")
+                    image = fallback
             if image is None:
                 raise ValueError("Missing review thumbnail")
             factor = min(width / image.shape[1], height / image.shape[0])
@@ -214,7 +257,9 @@ def _extract_frames(video: Path, run: Path, selected: list[dict], threads: int) 
 
 def audit_video(video: Path, run_dir: Path, target_fps: float = 2.0, max_keyframes: int = 320,
                 review_longest_edge: int = 512, split_seed: int = 7, validation_fraction: float = 0.2,
-                expected_sha256: str | None = None, threads: int = 4) -> dict:
+                expected_sha256: str | None = None, threads: int = 4,
+                sampling_mode: str = "uniform", adaptive_target_fps: float | None = None,
+                motion_threshold: float = 0.03, scope: dict | None = None) -> dict:
     video, run = Path(video).resolve(), Path(run_dir)
     if not math.isfinite(target_fps) or target_fps <= 0 or max_keyframes < 2 or threads < 1:
         raise ValueError("Invalid audit parameters")
@@ -223,16 +268,33 @@ def audit_video(video: Path, run_dir: Path, target_fps: float = 2.0, max_keyfram
     if expected_sha256 is not None and digest != expected_sha256:
         raise ValueError("Source video checksum differs from capture configuration")
     metadata = probe_video(video)
+    scope = normalize_scope(scope, duration_seconds=float(metadata["format"]["duration"]))
     origin, times = probe_timestamps(video)
     rows = _scan(video, run, times, metadata["display_size"], target_fps, review_longest_edge, threads)
-    selected = [dict(row) for row in choose_best_frames(rows, target_fps, max_keyframes)]
+    start, end = scope["start_time_seconds"], scope["end_time_seconds"]
+    for row in rows:
+        row["in_scope"] = ((start is None or row["timestamp_seconds"] >= start)
+                            and (end is None or row["timestamp_seconds"] < end))
+    in_scope_rows = [row for row in rows if row["in_scope"]]
+    if not in_scope_rows:
+        raise ValueError("Scope range contains no auditable source frames")
+    if sampling_mode not in ("uniform", "adaptive"):
+        raise ValueError("sampling_mode must be uniform or adaptive")
+    if sampling_mode == "adaptive":
+        high_fps = target_fps if adaptive_target_fps is None else adaptive_target_fps
+        selected = [dict(row) for row in choose_adaptive_frames(
+            in_scope_rows, target_fps, high_fps, motion_threshold, max_keyframes)]
+    else:
+        high_fps = None
+        selected = [dict(row) for row in choose_best_frames(in_scope_rows, target_fps, max_keyframes)]
     if not selected:
         raise ValueError("No keyframes selected")
     median = float(np.median([row["sharpness"] for row in selected]))
     splits = assign_splits([r["timestamp_seconds"] for r in selected], split_seed, validation_fraction)
     for row, split in zip(selected, splits):
         row.update({"frame_id": f"source_{row['source_index']:06d}", "source_pts_seconds": origin + row["timestamp_seconds"],
-                    "split": split, "low_sharpness_relative": row["sharpness"] < 0.35 * median,
+                    "split": split, "in_scope": True,
+                    "low_sharpness_relative": row["sharpness"] < 0.35 * median,
                     "decision": "retained_for_coverage"})
     _extract_frames(video, run, selected, threads)
     for row in selected:
@@ -254,10 +316,17 @@ def audit_video(video: Path, run_dir: Path, target_fps: float = 2.0, max_keyfram
         "source_video": str(video), "source_sha256": digest, "duration_seconds": duration,
         "encoded_size": [metadata["stream"]["width"], metadata["stream"]["height"]],
         "display_size": metadata["display_size"], "rotation_degrees": metadata["rotation_degrees"],
-        "decoded_frames": len(times), "keyframes": len(selected), "timestamp_basis": "decoder_best_effort_pts",
+        "decoded_frames": len(times), "keyframes": len(selected), "scope": scope,
+        "in_scope_source_frames": len(in_scope_rows),
+        "out_of_scope_source_frames": len(rows) - len(in_scope_rows),
+        "timestamp_basis": "decoder_best_effort_pts",
         "source_pts_origin_seconds": origin, "first_selected_seconds": selected_times[0],
         "last_selected_seconds": selected_times[-1], "largest_temporal_gap_seconds": max(gaps),
-        "target_fps": target_fps, "review_longest_edge": review_longest_edge,
+        "target_fps": target_fps, "sampling_mode": sampling_mode,
+        "adaptive_target_fps": high_fps, "motion_threshold": motion_threshold,
+        "high_motion_source_frames": sum(row["motion_score"] >= motion_threshold for row in rows),
+        "selected_high_motion_frames": sum(row["motion_score"] >= motion_threshold for row in selected),
+        "review_longest_edge": review_longest_edge,
         "selected_sharpness_median": median,
         "low_sharpness_flagged": sum(r["low_sharpness_relative"] for r in selected),
         "train_frames": splits.count("train"), "validation_frames": splits.count("validation"),
@@ -266,9 +335,11 @@ def audit_video(video: Path, run_dir: Path, target_fps: float = 2.0, max_keyfram
                         "Low-texture windows retained; masks and geometric consistency checks remain pending.",
                         "No reconstruction or verified scale is produced by this audit."],
     }
-    write_json(run / "source_manifest.json", {"source_sha256": digest, "source_path": str(video), "metadata": metadata})
+    write_json(run / "source_manifest.json", {"source_sha256": digest, "source_path": str(video),
+               "metadata": metadata, "scope": scope,
+               "out_of_scope_source_frames": len(rows) - len(in_scope_rows)})
     write_json(run / "frame_manifest.json", {"schema_version": 1, "source_sha256": digest,
-               "timestamp_basis": report["timestamp_basis"], "frames": selected})
+               "timestamp_basis": report["timestamp_basis"], "scope": scope, "frames": selected})
     write_json(run / "audit_report.json", report)
     reports = run / "reports"
     reports.mkdir()

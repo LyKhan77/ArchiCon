@@ -28,7 +28,11 @@ def main() -> int:
         report = audit_video(ROOT / config["input_video"], run,
                              target_fps=config["sampling"]["target_fps"],
                              max_keyframes=config["sampling"]["max_keyframes"],
-                             expected_sha256=config["verified_metadata"]["sha256"], threads=args.threads)
+                             expected_sha256=config["verified_metadata"]["sha256"], threads=args.threads,
+                             sampling_mode=config["sampling"].get("mode", "uniform"),
+                             adaptive_target_fps=config["sampling"].get("adaptive_target_fps"),
+                             motion_threshold=config["sampling"].get("motion_threshold", .03),
+                             scope=config.get("scope"))
         write_json(run / "status.json", {"status": "complete", "stage": "video_audit"})
         print(json.dumps({"run": str(run), "keyframes": report["keyframes"],
                           "decoded_frames": report["decoded_frames"],

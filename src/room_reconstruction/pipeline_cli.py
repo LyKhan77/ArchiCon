@@ -17,6 +17,7 @@ import yaml
 from .pipeline_state import atomic_json,FileLock,workspace_path,WaitingResources,fingerprint
 from .pipeline_layout import job_dir,create_job_dir,job_asset,is_nested_job
 from .provenance import sha256_file
+from .scope import normalize_scope
 
 
 def controller_progress(root,job,phase,**details):
@@ -29,7 +30,7 @@ def controller_progress(root,job,phase,**details):
     atomic_json(path,dict(phase=phase,started_at=started,updated_at=now,**details))
 
 
-def register_job(root,video,job_id,machine_config,pipeline_config,*,ssh_target=None,reuse_config=None,review_mode='manual'):
+def register_job(root,video,job_id,machine_config,pipeline_config,*,ssh_target=None,reuse_config=None,review_mode='manual',scope=None):
     root=Path(root).resolve()
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,31}',job_id):raise ValueError('job-id must be 1–32 letters/digits/_/-')
     video=Path(video);video=(root/video).resolve() if not video.is_absolute() else video.resolve()
@@ -50,6 +51,7 @@ def register_job(root,video,job_id,machine_config,pipeline_config,*,ssh_target=N
       local_input_video=local,input_video='raw_videos/'+digest[:12]+'_'+basename,input_sha256=digest,
       machine_config=str(machine_path.relative_to(root)),processing=processing,review=dict(profile.get('review',{'required':True})),
       delivery_root=profile.get('delivery',{}).get('root','end_product'),
+      scope=normalize_scope(scope if scope is not None else profile.get('scope')),
       transport=dict(mode='ssh' if ssh_target else 'local',ssh_target=ssh_target,server_root=server_root))
     if reuse_config:job['reuse']=json.loads(workspace_path(root,reuse_config).read_text())
     if review_mode!='manual':raise ValueError('Only manual review is enabled')
@@ -64,6 +66,7 @@ def describe_plan(job):
       S00='Verify input and transfer',S01='Pinned runtime/resource guards',S02='Decode full timeline and audit',
       S03='Camera components and trajectory checks',S04='Frame/grid/hash mask manifest',S05='Bounded DA3',
       S06='Filtering + TSDF',S06R='Camera renders and orientation provenance',S07='Plan + viewer mesh',
+      S06G='Optional validated global alignment; disconnected worlds remain fallback',
       S08='Standalone HTML + browser QA',S09='Manual visual review handoff',S10='Bounded typed refinement after apply-review',S11='Verified delivery',
       reuse=job.get('reuse',{}),delivery_root=job.get('delivery_root','end_product/part2'))
 
@@ -160,6 +163,9 @@ def process_server(root,job,*,detach=False):
     prepare_server(root,job)
     controller_progress(root,job,'processing')
     status=worker_state(job)
+    if status['execution_status']=='complete':
+        controller_progress(root,job,'downloading')
+        return obtain_bundle(root,job)
     if status['execution_status']!='running':
         start_worker(job);time.sleep(.5)
     if detach:return None

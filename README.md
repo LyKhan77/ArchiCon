@@ -4,6 +4,8 @@ Pipeline untuk video iPhone/ruangan: kamera COLMAP → DA3 depth → filtering/T
 
 Review tetap **manual**. Script menyiapkan output dan QA lalu berhenti; tidak memanggil agent/LLM atau layanan review otomatis. Dimensi memakai unit relatif sampai ada pengukuran nyata.
 
+Profil CLI opsional `--pipeline-config configs/pipeline.dense.yaml` memakai frame asli 4 fps dan matching lebih rapat. S06G dapat menghasilkan kandidat mesh/denah/HTML gabungan untuk area yang alignment kameranya lolos validasi; area lain tetap fallback. Ini belum jaminan rekonstruksi seluruh bangunan. [Alur dan batas](WORKFLOW.md).
+
 Checkpoint source: [CHANGELOG.md](CHANGELOG.md). Untuk checkout baru, ikuti [SETUP](docs/SETUP.md); profil mesin aktif, media/model, hasil rekonstruksi dan rencana kerja tidak disertakan Git. Panduan kontribusi dan batas operasi: [AGENTS.md](AGENTS.md).
 
 ## Dashboard web
@@ -12,7 +14,7 @@ Checkpoint source: [CHANGELOG.md](CHANGELOG.md). Untuk checkout baru, ikuti [SET
 rtk proxy .venv/bin/python scripts/serve_dashboard.py
 ```
 
-Buka **http://127.0.0.1:8765**. ArchiCon memakai dark mode sesuai [DESIGN.md](DESIGN.md): pilih/upload video, beri ID baru, lalu Mulai rekonstruksi. Progress menampilkan stage nyata, log, contact sheet/render setelah tersedia, dan coverage setelah dihitung. Hasil berisi room tour, denah, mesh, laporan, input review manual dan unduhan ZIP.
+Buka **http://127.0.0.1:8765**. ArchiCon memakai dark mode sesuai [DESIGN.md](DESIGN.md): pilih/upload video, beri ID baru, pilih cakupan `Full traversal`, `Single room`, atau `Connected area`, lalu Mulai rekonstruksi. Progress menampilkan stage nyata, log, contact sheet/render setelah tersedia, dan coverage setelah dihitung. Hasil berisi room tour, denah, mesh, laporan, input review manual dan unduhan ZIP. Scope memberi label area dan optional time range; tidak menyatakan kualitas geometri sudah diterima.
 
 Satu controller dashboard aktif pada satu waktu. Browser dapat ditutup tanpa menghentikan controller; jika backend ditutup, jalankan lagi command yang sama untuk monitoring. Worker server terpisah tetap hidup. Jika controller gagal atau menunggu resource, periksa log lalu klik **Lanjutkan proses**. Review tidak dijalankan otomatis dan tidak dikirim ke layanan model. Panduan: [docs/ARCHICON.md](docs/ARCHICON.md).
 
@@ -28,6 +30,8 @@ rtk proxy .venv/bin/python scripts/run_pipeline.py run \
 ```
 
 ID job harus baru,1–32huruf/angka/underscore/hyphen. Jangan memakai reuse-config video acuan untuk rekaman lain. Script memverifikasi SHA input lokal/server dan memakai konfigurasi mesin yang sudah terpasang.
+
+Untuk pilot satu ruang, gunakan profil `configs/pipeline.single-room.yaml` atau pilih **Single room** di dashboard. Profil ini memakai seluruh video sebagai scope default dan memberi label `Workshop`; timestamp opsional hanya tersedia melalui job metadata.
 
 ```bash
 rtk proxy .venv/bin/python scripts/run_pipeline.py status --job-id ruang_rapat_001
@@ -86,7 +90,7 @@ Keputusan ditambahkan dalam versi baru tanpa mengubah byte produk yang direview.
 
 Laptop: registrasi, transfer, monitoring, HTML build dan browser QA. Server: audit, kamera, depth, fusion/render/export. Profil ada di `configs/paths.local.yaml`, `configs/paths.server.yaml` dan `configs/pipeline.yaml`.
 
-Hanya GPU0 yang dipilih melalui UUID. Gate saat ini: RAM available≥8GiB, disk free≥50GiB, GPU free≥14GiB dan idle; CPU4thread/2worker. Runtime/model server terpisah dan sudah dipin. Default matcher auto memakai exhaustive hingga400keyframe, sequential di atasnya. Ini bukan jaminan setiap rekaman dapat direkonstruksi.
+Hanya satu GPU yang diizinkan pada profil mesin, dipilih melalui UUID dan diekspos sebagai logical `cuda:0`. Gate saat ini: RAM available≥8GiB, disk free≥50GiB, GPU free≥14GiB dan idle; CPU4thread/2worker. Runtime/model server terpisah dan sudah dipin. Profil default memakai adaptive 2/4fps dan sequential overlap32; profil dense opsional memakai 4fps dan overlap64. Mode auto/exhaustive tetap tersedia. Ini bukan jaminan setiap rekaman dapat direkonstruksi.
 
 ## Dokumentasi dan arsip
 

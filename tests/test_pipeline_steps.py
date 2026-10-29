@@ -40,6 +40,56 @@ def component(root, name, ids):
 
 
 class PipelineStepsTests(unittest.TestCase):
+    def test_global_tour_groups_connected_worlds_and_keeps_every_fallback(self):
+        rows = [dict(id=key) for key in ('main', 'a', 'b', 'c')]
+        global_component = dict(id='architecture', source_component_ids=['a', 'b'])
+        result = steps._tour_components(rows, global_component)
+        self.assertEqual([row['id'] for row in result], ['architecture', 'main', 'c'])
+        self.assertEqual([row['id'] for row in rows], ['main', 'a', 'b', 'c'])
+        with self.assertRaises(ValueError):
+            steps._tour_components(rows, dict(id='architecture', source_component_ids=['a', 'missing']))
+
+    def test_global_stage_no_alignment_preserves_existing_tour_and_transfers_evidence(self):
+        from room_reconstruction.global_architecture import build_architecture
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve(); job, _ = self.fixture(root)
+            job['processing'] = dict(global_alignment=True)
+            runner = unittest.mock.Mock()
+            def execute(stage, inputs, params, command, **kwargs):
+                self.assertEqual(stage, 'S06G_global')
+                run = root / 'outputs/global'; run.mkdir(); products = run / 'products'; products.mkdir()
+                report = build_architecture(root, products, _read(root / params['config']))
+                write(run / 'status.json', dict(stage='global_architecture', status='complete'))
+                write(run / 'report.json', report)
+                return run
+            runner.run.side_effect = execute
+            bundle = steps.run_server(root, root / 'outputs/test_job', job, runner)
+            self.assertEqual(bundle['global_architecture']['status'], 'no_alignment')
+            self.assertIsNone(bundle['global_architecture']['component'])
+            self.assertEqual(bundle['tour_run'], 'tour')
+            self.assertTrue(any(item['file'].endswith('products/alignment.json') for item in bundle['artifacts']))
+            self.assertEqual(bundle['coverage']['processed'], 3)
+
+    def test_global_root_can_be_an_accepted_area_when_main_is_absent(self):
+        from room_reconstruction.global_architecture import build_architecture
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve(); job, _ = self.fixture(root)
+            job['processing'] = dict(global_alignment=True)
+            job['reuse']['components'][0]['id'] = 'room'
+            self.refresh_tour(root, job)
+            runner = unittest.mock.Mock()
+            def execute(stage, inputs, params, command, **kwargs):
+                config = _read(root / params['config'])
+                self.assertEqual(config['root_component'], 'room')
+                run = root/'outputs/global'; run.mkdir(); products = run/'products'; products.mkdir()
+                report = build_architecture(root, products, config)
+                write(run/'status.json', dict(stage='global_architecture', status='complete'))
+                write(run/'report.json', report)
+                return run
+            runner.run.side_effect = execute
+            bundle = steps.run_server(root, root/'outputs/test_job', job, runner)
+            self.assertEqual(bundle['global_architecture']['aligned_components'], ['room'])
+
     def test_bundle_transfers_registry_for_nested_export(self):
         from room_reconstruction.pipeline_layout import create_job_dir,reserve_run
         with TemporaryDirectory() as tmp:
@@ -69,6 +119,14 @@ class PipelineStepsTests(unittest.TestCase):
         self.assertGreaterEqual(capture['sampling']['max_keyframes'], 1401)
         self.assertEqual(capture['input_video'], 'raw_videos/long.mov')
         with self.assertRaises(ValueError): steps.capture_config('video', 'sha', float('nan'), 2)
+
+    def test_capture_config_records_adaptive_sampling(self):
+        capture = steps.capture_config('raw_videos/fast.mov', 'sha', 10, 2,
+                                       sampling_mode='adaptive', adaptive_target_fps=4,
+                                       motion_threshold=.08)
+        self.assertEqual(capture['sampling']['mode'], 'adaptive')
+        self.assertEqual(capture['sampling']['adaptive_target_fps'], 4)
+        self.assertEqual(capture['sampling']['motion_threshold'], .08)
 
     def test_select_components_uses_quality_and_unique_frame_coverage(self):
         with TemporaryDirectory() as tmp:

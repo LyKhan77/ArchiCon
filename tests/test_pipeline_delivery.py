@@ -3,11 +3,44 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-from room_reconstruction.pipeline_delivery import verify_bundle,finalize_delivery,clone_delivery
+from room_reconstruction.pipeline_delivery import verify_bundle,finalize_delivery,clone_delivery,make_delivery
+from unittest.mock import patch
 from room_reconstruction.provenance import sha256_file
 
 
 class DeliveryTests(unittest.TestCase):
+    def test_delivery_copies_global_mesh_and_global_floorplan(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve(); export = root/'outputs/tour'; export.mkdir(parents=True)
+            (export/'tour-data.json').write_text('{"components":[]}')
+            evidence = export/'alignment.json'; evidence.write_text('{"status":"aligned_partial"}')
+            mesh = export/'architecture.glb'; mesh.write_bytes(b'verified candidate mesh')
+            (export/'architecture-floorplan.svg').write_text('<svg/>')
+            bundle = dict(job_id='job', tour_run='tour', components=[], coverage=dict(processed=12),
+                global_architecture=dict(status='aligned_partial', component=dict(mesh=str(mesh.relative_to(root))),
+                    aligned_components=['main', 'b'], fallback_components=['c'], alignment=str(evidence.relative_to(root))))
+            with patch('room_reconstruction.pipeline_delivery.subprocess.run') as build:
+                build.return_value.returncode = 0
+                delivery = make_delivery(root, root/'outputs/jobs/job', bundle)
+            self.assertEqual((delivery/'mesh/architecture.glb').read_bytes(), mesh.read_bytes())
+            self.assertTrue((delivery/'denah/architecture.svg').exists())
+    def test_delivery_includes_global_diagnostics_without_claiming_complete_building(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve(); export = root / 'outputs/tour'; export.mkdir(parents=True)
+            (export/'tour-data.json').write_text('{"components":[]}')
+            evidence = root / 'outputs/alignment.json'; evidence.write_text('{"status":"no_alignment"}')
+            bundle = dict(job_id='job', tour_run='tour', components=[], coverage=dict(processed=0),
+                global_architecture=dict(status='no_alignment', component=None, aligned_components=['main'],
+                    fallback_components=['b'], alignment=str(evidence.relative_to(root))))
+            with patch('room_reconstruction.pipeline_delivery.subprocess.run') as build:
+                build.return_value.returncode = 0
+                delivery = make_delivery(root, root/'outputs/jobs/job', bundle)
+            self.assertEqual((delivery/'reports/global-alignment.json').read_text(), evidence.read_text())
+            self.assertFalse((delivery/'mesh/architecture.glb').exists())
+            manifest = finalize_delivery(root, delivery, bundle, None, None, pending=True)
+            self.assertFalse(manifest['full_room_reconstruction_complete'])
+            self.assertEqual(manifest['global_architecture']['status'], 'no_alignment')
+
     def test_review_clone_supports_new_job_delivery_without_touching_part1(self):
         with TemporaryDirectory() as temporary:
             root=Path(temporary).resolve();source=root/'end_product/capture/v001';source.mkdir(parents=True)
@@ -26,6 +59,14 @@ class DeliveryTests(unittest.TestCase):
             with self.assertRaises(ValueError):verify_bundle(root,bundle,input_sha256='video')
             bundle['artifacts'][0]['file']='../outside'
             with self.assertRaises(ValueError):verify_bundle(root,bundle,input_sha256='video')
+
+    def test_global_references_must_be_part_of_verified_artifact_inventory(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary); (root/'private.txt').write_text('not a product')
+            bundle = dict(schema_version=1, input_sha256='video', artifacts=[],
+                          global_architecture=dict(alignment='private.txt', component=None))
+            with self.assertRaisesRegex(ValueError, 'Global artifact'):
+                verify_bundle(root, bundle, input_sha256='video')
 
     def test_unreviewed_delivery_never_claims_acceptance(self):
         with TemporaryDirectory() as temporary:

@@ -15,10 +15,10 @@ rtk proxy .venv/bin/python scripts/serve_dashboard.py
 Buka http://127.0.0.1:8765. Gunakan `--port 8766` jika port default dipakai aplikasi lain. Backend hanya mendengarkan localhost. Satu proses backend untuk workspace ini; semua tab browser memakai backend tersebut.
 
 1. Pilih video dari perangkat atau pilih video yang sudah ada di raw_videos. Preview bergantung dukungan codec browser; pipeline tetap membaca video menggunakan decoder server.
-2. Isi ID rekonstruksi baru: maksimal32karakter huruf/angka/underscore/hyphen. ID lama tidak ditimpa. Upload dibatasi20GiB dan ditulis bertahap ke raw_videos/uploads/UPLOAD/source.EXT; hanya upload lengkap yang muncul sebagai input.
+2. Isi ID rekonstruksi baru: maksimal32karakter huruf/angka/underscore/hyphen. ID lama tidak ditimpa. Pilih scope `Full traversal`, `Single room`, atau `Connected area`; scope selain full traversal meminta nama area dan menerima timestamp opsional. Upload dibatasi20GiB dan ditulis bertahap ke raw_videos/uploads/UPLOAD/source.EXT; hanya upload lengkap yang muncul sebagai input.
 3. Klik Mulai rekonstruksi. Job baru selalu fresh, tanpa reuse-config video acuan. Controller melakukan registrasi/checksum, sync kode/video, menjalankan worker server, mengambil artefak, membangun HTML dan menjalankan browser QA.
 4. Tab Progress menunjukkan fase transfer/download/packaging/QA serta attempt stage numerik dari server. Tidak ada persentase komputasi atau ETA buatan. Persentase upload adalah jumlah byte browser → laptop, terpisah dari transfer SSH laptop → server. Preview audit/render muncul setelah file tersedia. Snapshot dapat tertinggal beberapa detik; gangguan SSH ditampilkan sebagai status stale.
-5. Tab Hasil akhir menyediakan room tour dalam iframe atau tab baru, denah, file mesh/laporan, input review dan paketZIP. Produk tetap berada di end_product/JOB/vNNN, tanpa menyalin data depth mentah ke browser.
+5. Tab Hasil akhir menyediakan room tour dalam iframe atau tab baru, denah, file mesh/laporan, sesi review global dan paketZIP. Produk tetap berada di end_product/JOB/vNNN, tanpa menyalin data depth mentah ke browser.
 
 Room tour memakai workspace arsitektur/interior dark mode yang selaras dengan dashboard: thumbnail komponen, kontrol potongan model, canvas 3D, lembar denah terang dan pengukuran draft. Font juga embedded sehingga HTML tetap offline. Untuk job `lantai3_part1_1016_1525`, hasil terbaru adalah v002; refresh halaman jika sebelumnya masih membuka v001. [Panduan kontrol room tour](ROOM_TOUR.md).
 
@@ -28,7 +28,7 @@ Pengunci controller dipegang proses detached, sehingga reload/penutupan browser 
 
 Saat controller berhenti/gagal atau menunggu resource, klik Lanjutkan proses setelah penyebab selesai. Resume memanfaatkan artefak yang lolos pemeriksaan pipeline. Jika worker server masih hidup, controller mengambil kembali monitoring. Tidak ada tombol menghentikan proses server lain.
 
-Komputasi selesai berbeda dari kualitas diterima. Review tetap manual melalui input JSON dan CLI apply-review yang dijelaskan di [WORKFLOW](../WORKFLOW.md). Web tidak memanggil agent/LLM. Denah masih draft dan berskala relatif sampai ukuran nyata dikalibrasi dalam room tour; processed-frame coverage tidak membuktikan seluruh permukaan ruangan lengkap.
+Komputasi selesai berbeda dari kualitas diterima. Pada Tab Hasil akhir, sesi review global menyediakan Accept, Need review, dan Reject/perlu rekaman ulang. Reject meminta alasan dan dipetakan internal ke `needs_capture`; Accept dengan gap menjadi `accepted_partial`. Review tetap lokal dan manual, tanpa agent/LLM. JSON/CLI `apply-review` tetap tersedia untuk review detail. Denah masih draft dan berskala relatif sampai ukuran nyata dikalibrasi dalam room tour; processed-frame coverage tidak membuktikan seluruh permukaan ruangan lengkap. Scope hanya mengatur label/provenance dan pilihan frame, bukan klaim kelengkapan.
 
 ## Implementasi
 

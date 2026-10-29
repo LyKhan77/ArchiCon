@@ -41,6 +41,22 @@ rtk proxy .venv/bin/python scripts/run_pipeline.py resume --job-id rekaman_baru_
 
 `manual` adalah default dan satu-satunya mode review. `run` membuat job baru; ID yang sudah ada ditolak. `resume` melanjutkan job itu. `--detach` melepas controller setelah worker server dimulai; gunakan `resume` untuk mengambil hasil dan packaging. Putus SSH/laptop tidak menghentikan worker. Lock mencegah dua controller/job yang sama.
 
+### Scope rekonstruksi
+
+Setiap job menyimpan `scope.kind`: `full_traversal` (default lama), `single_room`, atau `connected_area`. Scope `single_room` memproses seluruh input video sebagai satu ruang secara default; `connected_area` cocok untuk lintasan pantry–printer room–stairs. `scope.name` memberi label output. `start_time_seconds` dan `end_time_seconds` opsional membatasi segmen tanpa membuat video turunan; frame di luar rentang tetap tercatat sebagai source accounting dan frame ID in-scope tidak berubah.
+
+Scope diteruskan ke audit, kamera, depth, tour, delivery, laporan coverage dan review packet. Scope tidak mengubah model DA3, parameter TSDF, guard resource atau status `full_room_reconstruction_complete`; gap, holes, skala relatif dan review manual tetap dilaporkan. Dashboard menyediakan selector scope dan field nama/range ketika bukan `full_traversal`.
+
+Profil dense opsional memilih frame asli 4 fps penuh, SIFT longest-edge1600/max8192 dan sequential overlap64, dengan guard resource yang sama. Ini menambah waktu komputasi; tidak memperbaiki blur atau mengisi geometri yang tidak terlihat. Gunakan ID baru:
+
+```bash
+rtk proxy .venv/bin/python scripts/run_pipeline.py run --input raw_videos/rekaman_baru.MOV --job-id rekaman_dense_001 --pipeline-config configs/pipeline.dense.yaml --review-agent manual
+```
+
+Dashboard tetap memakai profil default; contoh di atas adalah pemilihan profil melalui CLI.
+
+Dashboard menyediakan scope `Full traversal`, `Single room`, dan `Connected area`. Pilih `Single room` untuk satu ruangan seperti workshop; pilih `Connected area` untuk beberapa ruang yang dilalui dalam satu loop. Isi nama area dan timestamp hanya jika video memuat bagian di luar area yang ingin diproses. Scope membatasi label/provenance dan frame selection, bukan klaim kelengkapan permukaan.
+
 Video harus selesai ditulis/disalin sebelum `run`. Jika byte video berubah setelah registrasi, checksum gate menghentikan job; gunakan input final dan ID baru.
 
 Default mesin: `configs/paths.server.yaml`; SSH: `configs/paths.local.yaml`. `--ssh-target user@host` mengganti target. `--local-worker` membutuhkan seluruh runtime/model pada mesin tersebut, bukan jalur normal laptop ini.
@@ -84,12 +100,13 @@ flowchart TD
 | Stage | Kontrak utama |
 |---|---|
 | S00/S01 | Input SHA/config resolved; model/runtime/resource gate sebelum komputasi |
-| S02 | Full-timeline keyframe, source PTS, hash RGB, audit dan contact sheet; default 2fps tidak memotong akhir video |
-| S03 | Sparse components, K/pose, undistorted RGB; outlier ditolak/dikarantina, gap tetap dicatat |
+| S02 | Full-timeline keyframe, source PTS, hash RGB, audit dan contact sheet; default base 2fps dengan adaptive 4fps pada interval gerak tinggi, tanpa frame sintetis |
+| S03 | Sparse components, K/pose, undistorted RGB; sequential overlap/loop closure dapat dipakai untuk menjembatani lintasan, outlier tetap ditolak/dikarantina |
 | S04 | Mask sesuai frame/grid/hash. Kaca/manual kosong tetap unreviewed; tidak memakai polygon capture lama |
 | S05 | DA3 conditioned per komponen/window; frame/K/pose konsisten, optical-axis Z, unit map relatif |
 | S06 | Confidence/spatial/multi-view/person filtering, TSDF, GLB/PLY valid |
 | S06R | Actual-triangle render, SHA mesh/kamera, transform world→viewer sebelum exporter |
+| S06G | Alignment global opsional: shared camera Sim(3), validasi terpisah, orientasi dan cycle; `no_alignment` tetap membawa bukti/fallback |
 | S07 | Irisan, SVG/PNG, lintasan, viewer mesh. Bila lantai gagal, 3D valid dipertahankan dengan peringatan denah |
 | S08 | HTML embedded dan browser QA; setiap keyframe processed/gap, world berbeda tidak dipaksa digabung |
 | S09 | Menyiapkan input/prompt/schema review; tidak memulai reviewer |
@@ -98,7 +115,11 @@ flowchart TD
 
 Komponen yang seluruh frame-nya duplikat komponen lebih besar dapat dilewati; overlap sebagian dipertahankan. Coverage menghitung union ID frame. Kegagalan data per komponen dilaporkan, komponen lain yang valid tetap dipaketkan. Error runtime/model/resource tidak disamarkan sebagai kegagalan geometri.
 
-Default matcher kamera `auto` memakai exhaustive untuk≤400keyframe yang benar-benar diaudit (maks79.800pasangan); di atasnya sequential dengan overlap16. Tujuannya membatasi biaya kuadratik sambil memberi lebih banyak pasangan penghubung pada video pendek. Mode dapat dipaksa lewat `processing.matching`; ini bukan jaminan semua video akan berhasil. Klip dinding polos dapat tetap gagal initial pair tanpa variasi geometri/kalibrasi yang cukup.
+Profil room-tour default memakai adaptive sampling (base 2fps, high-motion 4fps) dan sequential matching overlap32. Loop closure hanya boleh diaktifkan jika `processing.vocab_tree_path` menunjuk ke vocabulary tree lokal; pipeline offline tidak mengunduh asset. `auto` tetap memakai exhaustive untuk≤400keyframe yang benar-benar diaudit (maks79.800pasangan); di atasnya sequential dengan overlap16. Adaptive sampling hanya memilih frame asli dan menaikkan kepadatan di interval gerak tinggi; tidak memperbaiki motion blur. Mode, overlap dan loop closure dapat diubah lewat `processing`; ini bukan jaminan semua video akan tersambung. Klip dinding polos dapat tetap gagal initial pair tanpa variasi geometri/kalibrasi yang cukup.
+
+`processing.global_alignment: true` menjalankan S06G setelah semua render. Minimal enam frame kamera bersama diperlukan: dua pertiga untuk fitting, sisanya untuk validasi. Maksimum error pusat kamera 2% bentang lintasan bersama dan orientasi 3°; lintasan hampir kollinear/refleksi/cycle tidak konsisten ditolak. Root memakai `main`, atau world valid dengan kamera terbanyak jika `main` tidak tersedia. Jika root terisolasi tetapi grup lain punya alignment valid, dipilih grup tersambung dengan frame unik terbanyak; root awal tetap fallback dan keputusan dicatat di laporan. GLB tiap area dikembalikan dari world tampilannya sebelum transformasi menuju viewer root diterapkan. Ini pemeriksaan konsistensi kamera, bukan ground truth.
+
+Jika lebih dari satu world terhubung ke root, `mesh/architecture.glb` dan pilihan **Arsitektur gabungan · kandidat** beserta denah tersedia dalam HTML. Sidebar menampilkan grup gabungan dan semua fallback; world yang sudah digabung tidak diduplikasi di sidebar. Semua mesh lokal asli tetap tersedia di `mesh/` untuk inspeksi, sedangkan denah HTML memakai grup gabungan. Tahap ini menggabungkan triangle teramati, belum melakukan global TSDF, menghapus permukaan ganda atau menutup lubang. World tanpa bukti tetap fallback. Bila tidak ada edge lolos, tidak dibuat mesh gabungan dummy; laporan `reports/global-alignment.json` menjelaskan `no_alignment`, dan pipeline komponen tetap selesai. Frame-ID yang sama diperlukan pada tahap ini; pencocokan gambar lintas-world/PnP bridge belum diimplementasikan.
 
 Jika semua komponen gagal, job failed dengan diagnosis di worker/stage log dan `component-failures.json` bila tersedia. Belum ada delivery mesh/tour atau paket review visual lengkap untuk kondisi tersebut. Tidak membuat geometri dummy.
 
@@ -106,7 +127,7 @@ Jika semua komponen gagal, job failed dengan diagnosis di worker/stage log dan `
 
 | Batas | Kebijakan |
 |---|---|
-| GPU | Hanya UUID GPU0 yang dikonfigurasi; GPU1 tidak digunakan |
+| GPU | Hanya satu UUID GPU yang dikonfigurasi pada machine profile; isolasi mengeksposnya sebagai logical `cuda:0` |
 | Gate inference | ≥14 GiB VRAM free, idle, tanpa compute process lain |
 | Gate host/disk | ≥8 GiB RAM available, ≥50 GiB disk free sebelum stage berat |
 | Runtime | Process-tree RSS ≤6 GiB, GPU process ≤14 GiB, allocator PyTorch ≤12 GiB |
@@ -144,6 +165,8 @@ Pengguna memulai review saat diperlukan. Setelah JSON disimpan sesuai schema:
 rtk proxy .venv/bin/python scripts/run_pipeline.py apply-review --job-id rekaman_baru_001 --review-file outputs/jobs/rekaman_baru_001/review/manual.json
 ```
 
+Untuk keputusan global sederhana, gunakan sesi **Review hasil** pada Tab Hasil akhir. Pilih `Accept`, `Need review`, atau `Reject / perlu rekaman ulang`, lalu simpan keputusan. Reject membutuhkan alasan dan dipetakan ke `needs_capture`; Accept dengan gap coverage menghasilkan `accepted_partial`. Sesi web tidak menyediakan findings per komponen atau refinement; gunakan JSON/CLI di atas untuk review detail.
+
 JSON harus merujuk job, ronde, fingerprint, component ID, timestamp dan path bukti yang tepat. Bukti/bundle/produk yang berubah ditolak. Keputusan: `accept`, `refine`, `needs_capture`, `needs_human_review`. Reviewer tidak dapat mengarang meter, menyatakan semua interior lengkap atau menjalankan shell bebas.
 
 | Aksi refinement | Stage | Kandidat |
@@ -173,9 +196,11 @@ end_product/<job>/
   latest.json                                            # pointer mutable
   v001/
     mesh/<component>.glb
+    mesh/architecture.glb                              # hanya jika alignment lolos
     denah/<component>.svg, <component>.png
     room_tour/index.html
     reports/{coverage.json,component-failures.json}
+    reports/global-alignment.json                      # bila S06G diaktifkan
     calibration.json, README.md, manifest.json
 ```
 

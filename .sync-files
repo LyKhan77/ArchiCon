@@ -96,6 +96,8 @@ web/tour/index.html
 web/tour/main.js
 web/tour/style.css
 configs/pipeline.yaml
+configs/pipeline.dense.yaml
+configs/pipeline.single-room.yaml
 configs/reuse_l2bp3.json
 src/room_reconstruction/pipeline_state.py
 src/room_reconstruction/pipeline_steps.py
@@ -104,6 +106,11 @@ src/room_reconstruction/pipeline_delivery.py
 src/room_reconstruction/pipeline_cli.py
 scripts/pipeline_worker.py
 scripts/run_pipeline.py
+scripts/build_global_architecture.py
+src/room_reconstruction/alignment.py
+src/room_reconstruction/global_architecture.py
+tests/test_alignment.py
+tests/test_global_architecture.py
 tests/test_pipeline_state.py
 tests/test_pipeline_steps.py
 tests/test_pipeline_review.py
@@ -115,6 +122,7 @@ src/room_reconstruction/pipeline_cameras.py
 tests/test_pipeline_cameras.py
 schemas/agent-review.schema.json
 src/room_reconstruction/pipeline_layout.py
+src/room_reconstruction/scope.py
 tests/test_pipeline_layout.py
 docs/PRD.md
 docs/ROADMAP.md

@@ -149,7 +149,7 @@ def run_pilot(root, run, args):
     if Path(api.__file__).resolve() != (vendor / 'depth_anything_3/api.py').resolve():
         raise ValueError('DA3 import must resolve to the workspace vendor source')
     if torch.cuda.device_count() != 1 or os.environ['CUDA_VISIBLE_DEVICES'] != resources['selected_gpu']['uuid']:
-        raise ValueError('CUDA must expose exactly the selected physical GPU 0 UUID')
+        raise ValueError('CUDA must expose exactly the selected physical GPU UUID')
     torch.set_num_threads(4)
     torch.set_num_interop_threads(1)
     cv2.setNumThreads(1)
@@ -158,7 +158,7 @@ def run_pilot(root, run, args):
     cap_fraction = min(1., 12 * GIB / torch.cuda.get_device_properties(0).total_memory)
     torch.cuda.set_per_process_memory_fraction(cap_fraction, 0)
     torch.cuda.reset_peak_memory_stats(0)
-    progress(run, 'Loading offline DA3-LARGE on isolated physical GPU 0')
+    progress(run, 'Loading offline DA3-LARGE on the isolated selected GPU as logical cuda:0')
     model = api.DepthAnything3.from_pretrained(checkpoint['snapshot'], local_files_only=True,
         strict=True).eval().float().to('cuda:0')
     model.input_processor = partial(model.input_processor, num_workers=2)

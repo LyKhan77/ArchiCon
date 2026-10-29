@@ -138,7 +138,7 @@ class FullCameraCliTests(unittest.TestCase):
         (root / 'config.yaml').write_text(f'profile: server\npaths:\n  project_root: {root}\n')
         args = SimpleNamespace(config='config.yaml', threads=4, audit_run='audit', run_id='full',
                                max_image_size=960, max_features=4096, camera_model='OPENCV',
-                               matching='exhaustive', overlap=16)
+                               matching='exhaustive', overlap=16, loop_detection=False)
         return audit, run, args
 
     def test_resource_rejection_precedes_numpy_colmap_import(self):
@@ -193,6 +193,9 @@ class FullCameraCliTests(unittest.TestCase):
     def test_sequential_cpu_pairing_preserves_full_selection_and_arguments(self):
         self.check_cpu_models('sequential')
 
+    def test_sequential_loop_detection_flag_reaches_pairing(self):
+        self.check_cpu_models('sequential', loop_detection=True)
+
     def test_nonpositive_overlap_rejected_before_reconstruction(self):
         cli = self.cli()
         with tempfile.TemporaryDirectory() as tmp:
@@ -204,7 +207,7 @@ class FullCameraCliTests(unittest.TestCase):
             status = json.loads((root / 'outputs/new_full/status.json').read_text())
             self.assertIn('overlap', status['reason'])
 
-    def check_cpu_models(self, matching_mode):
+    def check_cpu_models(self, matching_mode, loop_detection=False):
         cli = self.cli()
         class Model:
             def __init__(self, ids, undistorted=False):
@@ -226,6 +229,7 @@ class FullCameraCliTests(unittest.TestCase):
         undistorted = {}
         calls = []
         matching_calls = []
+        expected_vocab_tree = None
         def undistort(output, primary, images, **kwargs):
             output = Path(output)
             (output / 'images').mkdir(parents=True)
@@ -263,7 +267,9 @@ class FullCameraCliTests(unittest.TestCase):
             self.assertEqual(pairing.overlap, 16)
             self.assertEqual(pairing.num_threads, 4)
             self.assertFalse(pairing.quadratic_overlap)
-            self.assertFalse(pairing.loop_detection)
+            self.assertEqual(pairing.loop_detection, loop_detection)
+            if loop_detection:
+                self.assertEqual(pairing.vocab_tree_path, expected_vocab_tree)
         def mapping(*args, **kwargs):
             self.assertFalse(kwargs['options'].ba_use_gpu)
             self.assertEqual(kwargs['options'].ba_global_backend, 'ceres')
@@ -274,6 +280,12 @@ class FullCameraCliTests(unittest.TestCase):
             root = Path(tmp).resolve()
             audit, run, args = self.setup_run(root)
             args.matching = matching_mode
+            args.loop_detection = loop_detection
+            args.vocab_tree_path = None
+            if loop_detection:
+                args.vocab_tree_path = str(root / 'vocab_tree.bin')
+                Path(args.vocab_tree_path).write_bytes(b'vocab-tree-fixture')
+                expected_vocab_tree = str(Path(args.vocab_tree_path).resolve())
             if matching_mode == 'sequential':
                 args.max_image_size, args.max_features = 1600, 8192
             original_manifest = (audit / 'frame_manifest.json').read_bytes()

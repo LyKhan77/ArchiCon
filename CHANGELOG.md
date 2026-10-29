@@ -2,6 +2,54 @@
 
 Completed changes are recorded here. Versions describe source checkpoints; private reconstruction products keep their independent `vNNN` delivery versions.
 
+## [Unreleased]
+
+### Manual review UI — 2026-10-29
+
+- Added a simple global review session to the dashboard Hasil akhir tab with local evidence links and Accept, Need review, or Reject/perlu rekaman ulang choices.
+- Reject requires a reason and maps to `needs_capture`; Accept with known gaps maps to `accepted_partial`. The existing JSON/CLI flow remains available for detailed review and refinement.
+
+### Fixed — 2026-10-28
+
+- Added a regression check for the remote sync manifest and included `src/room_reconstruction/scope.py`. Remote workers now receive the scope module required by `pipeline_steps.py`.
+- S02 audit contact sheets now recover a missing review thumbnail from its extracted keyframe, while still failing when both evidence images are unavailable.
+
+### Single-room scope — 2026-10-28
+
+- Added normalized job scope metadata for `full_traversal`, `single_room`, and `connected_area`, with optional time bounds and source-frame provenance.
+- Dashboard and delivery reports can label a single-room/connected-area reconstruction without changing DA3, TSDF, resource guards or manual review semantics. `full_room_reconstruction_complete` remains false until an independent review decision.
+- Added `configs/pipeline.single-room.yaml` for the `workshop.MOV` pilot. LingBot-Map is not installed or invoked; only bounded-scope orchestration concepts are represented.
+
+### Pantry–IT camera refinement checkpoint — 2026-10-26
+
+- A private CPU-only calibrated-cache experiment on `lantai2_part4.MOV` retained 553/555 audited observations in one camera world, including every audited pantry/corridor/IT observation. Native temporal discontinuities around 20, 62 and 97.8 seconds were corrected: the largest speed-to-median diagnostic fell from 407.72 to 1.44 across the full trajectory, without smoothing poses or changing mapper/triangulation thresholds.
+- Shared triangulated tracks at the four inspected transitions increased from 0/0/12/12 to 822/137/809/779. The refined model passed the existing calibration/residual gates and all 553 undistorted frames passed the inference input contract. This is camera consistency evidence, not metric or mesh-quality acceptance.
+- Job `lantai2_part4_calib_1026` reuses that take's audit and corrected cameras. At the recorded checkpoint it is `waiting_resources` before inference; no depth, mesh, floorplan or HTML product for this take has been produced.
+- Refinement scripts/evidence remain private experiments; the default pipeline has not gained automatic calibrated re-verification. Original attempts/products and baseline feature/match data remain unchanged. See [progress](docs/PROGRESS.md) and [priorities](docs/ROADMAP.md).
+
+### Global architecture alignment — 2026-10-26
+
+- Added conservative camera-world similarity fitting and a deterministic alignment graph. Six shared cameras are required, with disjoint fit/validation cameras, position/orientation gates and cycle checks. Unsupported worlds remain separate; alignment does not validate metric scale or fill missing surfaces.
+- Added CPU-only S06G, checksummed input/output artifacts, viewer-transform compensation and optional `mesh/architecture.glb`. Compatible global candidates are included in the HTML/floorplan export while original component worlds remain available.
+- `no_alignment` is a successful diagnostic outcome with a transferred evidence report and no dummy global mesh. The real reused lantai3_part2 delivery has 17 worlds without shared frame IDs: it remains unaligned, pending review and incomplete. No new depth inference was used in this validation.
+- Restored the exact original annotation SHA for the previous adaptive main surface after diagnosing a duplicate-worker overwrite; overwritten bytes were backed up. Final meshes/products were not rewritten.
+- Verification: 280 Python tests (277 passed, 3 backend-dependent skips) with real GLB fixtures using the pinned Trimesh 5.1.1 in temporary test dependencies; 7 JavaScript calibration tests passed. The actual no-alignment delivery passed offline/mobile browser QA; this does not establish reconstruction quality.
+- Added an optional dense CLI profile (4 FPS, overlap 64, SIFT 1600/8192). A CPU-only same-video benchmark registered 824/999 cameras versus 370/502 baseline, reduced accepted worlds from 18 to 16 and increased largest-world share from 15.7% to 28.7%. Surface quality remains a separate review; this profile does not fabricate frames or relax resource guards.
+- If the requested root is isolated, S06G can select the largest independently validated connected group and retain the original root as fallback. The tour groups merged worlds into one entry without dropping fallback views; original local meshes remain separate downloadable artifacts.
+- Real connected-group validation completed: 824/999 processed frames, two worlds merged using 20 shared cameras (6 held out), 10 fallback worlds, all 824 viewpoint IDs preserved and all 12 local meshes byte-identical to the prior candidate. Architecture GLB/floorplan/HTML and offline/mobile QA passed. Quality remains pending/unassessed: floating/stretched surfaces and holes persist, and the whole building is not connected.
+- Final connected-group regression: 282 Python tests (279 passed, 3 backend-dependent skips), plus 12 alignment/GLB tests in the pinned server geometry runtime. Initial 7 JavaScript calibration tests and positive synthetic HTML QA also passed.
+
+### Changed
+
+- The default room-tour profile now samples original video frames adaptively: base 2 FPS and up to 4 FPS in high-motion intervals, with sequential camera matching at overlap 32. Loop closure is optional and requires a local vocabulary tree for offline execution.
+- Audit reports persist motion metrics and sampling settings so higher-density frame selection remains traceable and bounded.
+- The default motion threshold is calibrated to the recorded iPhone profile at 0.03; it remains configurable per job because motion scores depend on resolution and scene content.
+
+### Fixed
+
+- DA3 smoke/full-depth resource isolation now accepts the configured GPU by UUID regardless of its host index. The selected device remains the only visible CUDA device and is addressed as logical `cuda:0`.
+- Added regression coverage for a selected physical GPU at index 1.
+
 ## [0.1.0] — 2026-10-19
 
 First source checkpoint of ArchiCon. The working reconstruction/dashboard/viewer implementation was validated during 14–16 October 2026; this checkpoint adds repository guidance and publication hygiene.

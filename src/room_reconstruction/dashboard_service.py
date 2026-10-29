@@ -21,6 +21,7 @@ from .dashboard_snapshot import read_json, snapshot, tail
 from .pipeline_cli import register_job
 from .pipeline_layout import job_dir, validate_job_id
 from .pipeline_state import atomic_json, FileLock
+from .scope import normalize_scope
 
 VIDEO_EXTENSIONS={'.mov','.mp4','.m4v','.webm','.avi','.mkv'}
 
@@ -119,11 +120,19 @@ class DashboardService:
         threading.Thread(target=reap,name='archicon-controller-wait',daemon=True).start()
         return dict(job_id=jid,pid=proc.pid)
 
-    def start_job(self, input_path, job_id):
+    def start_job(self, input_path, job_id, scope=None):
         validate_job_id(job_id); video=self.input_file(input_path); lock=self._acquire()
         try:
             target=yaml.safe_load((self.root/'configs/paths.local.yaml').read_text())['server']['ssh_target']
-            register_job(self.root,video,job_id,'configs/paths.server.yaml','configs/pipeline.yaml',ssh_target=target,review_mode='manual')
+            if scope is not None:
+                scope=normalize_scope(scope)
+            if scope is not None and any(scope.get(key) is not None for key in ('start_time_seconds','end_time_seconds')):
+                probe=subprocess.run(['ffprobe','-v','error','-show_entries','format=duration','-of','json',str(video)],
+                                     capture_output=True,text=True,check=True,timeout=60)
+                duration=float(json.loads(probe.stdout)['format']['duration'])
+                scope=normalize_scope(scope,duration_seconds=duration)
+            register_job(self.root,video,job_id,'configs/paths.server.yaml','configs/pipeline.yaml',
+                         ssh_target=target,review_mode='manual',scope=scope)
             return self._launch(job_id,lock)
         finally: lock.__exit__(None,None,None)
 
@@ -195,6 +204,66 @@ class DashboardService:
             return archive
         except BaseException: archive.unlink(missing_ok=True);raise
 
+    def review_session(self,jid):
+        """Return a safe, global review summary for the completed job."""
+        job=self._job(jid);directory=job_dir(self.root,jid);state=read_json(directory/'job-status.json')
+        result=dict(available=False,applied=state.get('review_status') not in (None,'pending'),
+                    review_input=state.get('review_input'),coverage=state.get('coverage') or {},
+                    component_count=0,evidence=[],delivery=state.get('delivery'),
+                    quality_status=state.get('quality_status','unassessed'))
+        review_input=state.get('review_input')
+        if not review_input:return result
+        path=self._safe(review_input,'outputs')
+        if not path.is_relative_to(directory/'review') or not path.is_file():return result
+        packet=read_json(path)
+        public=self._public(jid)
+        def evidence_rank(item):
+            name,kind=item;lower=name.lower();suffix=Path(name).suffix.lower()
+            if kind=='preview' and ('overview' in lower or 'floorplan' in lower):return 0
+            if kind=='preview':return 1
+            if '/denah/' in lower and suffix in ('.png','.svg'):return 2
+            if suffix=='.html':return 3
+            return 9
+        evidence=[name for name,kind in sorted(public.items(),key=evidence_rank)
+                  if kind=='preview' or Path(name).suffix.lower() in ('.png','.jpg','.jpeg','.svg','.html')]
+        result.update(available=True,coverage=packet.get('coverage') or result['coverage'],
+                      component_count=len(packet.get('component_ids',[])),evidence=evidence[:16])
+        return result
+
+    def apply_dashboard_review(self,jid,decision,reason=''):
+        """Apply one simple global decision through the existing review contract."""
+        mapping={'accept':('accept','accepted'),'needs_review':('needs_human_review','unassessed'),
+                 'reject':('needs_capture','needs_capture')}
+        if decision not in mapping:raise ValueError('Keputusan review tidak valid')
+        reason=str(reason or '').strip()
+        if decision=='reject' and not reason:raise ValueError('Alasan wajib untuk Reject')
+        job=self._job(jid);directory=job_dir(self.root,jid);state=read_json(directory/'job-status.json')
+        session=self.review_session(jid)
+        if not session['available']:raise ValueError('Sesi review belum tersedia')
+        input_file=self._safe(session['review_input'],'outputs');review_dir=input_file.parent
+        existing=read_json(review_dir/'agent-review.json')
+        if session['applied'] and existing:
+            expected=mapping[decision][0]
+            if existing.get('decision')==expected:
+                return dict(existing,delivery=state.get('delivery'),review_file=str((review_dir/'agent-review.json').relative_to(self.root)),already_applied=True)
+            raise ValueError('Review untuk sesi ini sudah diterapkan')
+        packet=read_json(input_file);coverage=packet.get('coverage') or {}
+        internal,quality=mapping[decision]
+        if decision=='accept' and (coverage.get('gaps') or packet.get('failed_components')):quality='accepted_partial'
+        summary=reason or {'accept':'Manual review diterima.','needs_review':'Menunggu review lanjutan.'}[decision]
+        candidates=packet.get('candidate_ids') or ['baseline'];selected='baseline' if 'baseline' in candidates else candidates[0]
+        payload=dict(schema_version=1,job_id=jid,review_round=packet['review_round'],
+                     review_input_sha256=packet['review_input_sha256'],decision=internal,
+                     quality_status=quality,summary=summary,findings=[],refinement_requests=[],
+                     required_user_actions=[],scale_status=packet.get('scale_status','relative'),
+                     full_room_reconstruction_complete=False,selected_candidate_id=selected)
+        atomic_json(review_dir/'manual.json',payload)
+        from .pipeline_cli import apply_manual_review
+        apply_manual_review(self.root,job,str((review_dir/'manual.json').relative_to(self.root)),
+                            review_input=str(input_file.relative_to(self.root)))
+        updated=read_json(directory/'job-status.json')
+        return dict(payload,delivery=updated.get('delivery'),review_file=str((review_dir/'agent-review.json').relative_to(self.root)))
+
     def job_view(self,jid):
         job=self._job(jid); directory=job_dir(self.root,jid); state=read_json(directory/'job-status.json')
         saved=read_json(directory/'dashboard-snapshot.json')
@@ -219,11 +288,13 @@ class DashboardService:
             except (KeyError,ValueError):pass
         return dict(job_id=jid,title=job.get('title',jid),execution_status=status,review_status=state.get('review_status','pending'),
                     quality_status=state.get('quality_status','unassessed'),scale_status=state.get('scale_status','relative'),
+                    scope=job.get('scope',{'kind':'full_traversal','name':None,'start_time_seconds':None,'end_time_seconds':None,'source_policy':'full_input_video'}),
                     full_room_reconstruction_complete=state.get('full_room_reconstruction_complete',False),
                     coverage=state.get('coverage') or live.get('coverage'),failed_components=state.get('failed_components',[]),
                     reason=state.get('reason') or live.get('worker',{}).get('reason',''),phase=local_phase,
                     stages=live.get('stages',[]),worker=live.get('worker',{}),previews=previews[:12],downloads=downloads,
                     delivery=state.get('delivery'),input_path=job.get('local_input_video'),
+                    review=self.review_session(jid),
                     elapsed_seconds=elapsed,elapsed_basis=elapsed_basis,
                     controller_active=bool(active),started_at=control.get('started_at') if active else None,
                     telemetry=dict(updated_at=live.get('updated_at'),stale=bool(active and (age is None or age>20)),error=live.get('error','')),

@@ -19,6 +19,13 @@ def verify_bundle(root,bundle,*,input_sha256):
         if sha256_file(path)!=item['sha256'] or path.stat().st_size!=item['size_bytes']:raise ValueError('Bundle artifact checksum differs: '+item['file'])
         names.append(item['file'])
     if len(set(names))!=len(names):raise ValueError('Duplicate bundle artifacts')
+    global_info = bundle.get('global_architecture')
+    if global_info:
+        references = [global_info['alignment']]
+        if global_info.get('component'):
+            references.extend(global_info['component'][key] for key in ('mesh', 'cameras', 'render_manifest'))
+        if any(name not in names or not Path(name).parts or Path(name).parts[0] != 'outputs' for name in references):
+            raise ValueError('Global artifact reference is not in verified output inventory')
     return bundle
 
 
@@ -42,18 +49,30 @@ def make_delivery(root,job_dir,bundle,*,delivery_root='end_product'):
         identifier=component['id']
         if '/' in identifier or '\\' in identifier or identifier in ('.','..'):raise ValueError('Unsafe component ID')
         _copy(workspace_path(root,component['mesh']),delivery/'mesh'/f'{identifier}.glb')
-        info=next(x for x in data['components'] if x['id']==identifier)
+        info=next((x for x in data['components'] if x['id']==identifier), None)
+        if info is None:
+            grouped = bundle.get('global_architecture', {}).get('aligned_components', [])
+            if identifier not in grouped: raise ValueError('Local component missing from tour and global group')
+            continue
         for key in ('svg_file',):
             name=info['floorplan'].get(key)
             if name and (export/name).is_file():_copy(workspace_path(export,name),delivery/'denah'/f'{identifier}.svg')
         image=export/(identifier+'-floorplan.png')
         if image.is_file():_copy(image,delivery/'denah'/f'{identifier}.png')
+    global_info = bundle.get('global_architecture')
+    if global_info:
+        _copy(workspace_path(root, global_info['alignment']), delivery/'reports/global-alignment.json')
+        if global_info.get('component'):
+            _copy(workspace_path(root, global_info['component']['mesh']), delivery/'mesh/architecture.glb')
+            for extension in ('svg', 'png'):
+                plan = export/('architecture-floorplan.'+extension)
+                if plan.is_file(): _copy(plan, delivery/'denah'/('architecture.'+extension))
     (delivery/'room_tour').mkdir()
     result=subprocess.run(['node',str(root/'web/build.mjs'),'--data',str(export/'tour-data.json'),
                            '--output',str(delivery/'room_tour/index.html')],cwd=root,capture_output=True,text=True,check=False)
     # Parent directory is intentionally created explicitly; builder refuses output overwrite.
     if result.returncode:raise RuntimeError('HTML packaging failed: '+result.stderr[-1800:])
-    atomic_json(delivery/'reports/coverage.json',bundle['coverage'])
+    atomic_json(delivery/'reports/coverage.json',dict(bundle['coverage'],scope=bundle.get('scope')))
     atomic_json(delivery/'reports/component-failures.json',bundle.get('failed_components',[]))
     atomic_json(delivery/'calibration.json',dict(schema_version=1,scale_status='relative',components=[]))
     return delivery
@@ -65,7 +84,7 @@ def review_packet(root,job_dir,bundle,delivery,round_number=0,candidates=None):
     for path in delivery.rglob('*.png'):qa.append(str(path.relative_to(root)))
     qa=list(dict.fromkeys(qa))
     for path in qa:workspace_path(root,path)
-    return dict(schema_version=1,job_id=bundle['job_id'],review_round=round_number,
+    return dict(schema_version=1,job_id=bundle['job_id'],scope=bundle.get('scope'),review_round=round_number,
       component_ids=[x['id'] for x in bundle['components']],coverage=bundle['coverage'],scale_status='relative',
       failed_components=bundle.get('failed_components',[]),component_evidence=bundle.get('qa_component_evidence',{}),
       evidence=qa,delivery=str(delivery.relative_to(root)),candidate_ids=['baseline',*(candidates or {}).keys()],candidates=candidates or {},
@@ -82,17 +101,31 @@ def finalize_delivery(root,delivery,bundle,review,review_dir,*,pending=False):
         quality=review['quality_status']
         atomic_json(delivery/'reports/agent-review.json',review)
         if review_dir and (Path(review_dir)/'agent-review.md').is_file():_copy(Path(review_dir)/'agent-review.md',delivery/'reports/agent-review.md')
-    summary=('# Hasil rekonstruksi '+bundle['job_id']+'\n\nBuka [room tour](room_tour/index.html) di browser; HTML offline.\n\n'
+    scope=bundle.get('scope') or dict(kind='full_traversal',name=None)
+    scope_label={'full_traversal':'Full traversal','single_room':'Single room','connected_area':'Connected area'}.get(scope.get('kind'),scope.get('kind','Unknown'))
+    if scope.get('name'): scope_label += ' — '+scope['name']
+    summary=('# Hasil rekonstruksi '+bundle['job_id']+'\n\n'
+      f'Scope: {scope_label}.\n\nBuka [room tour](room_tour/index.html) di browser; HTML offline.\n\n'
       'Mesh detail: `mesh/`. Denah draft: `denah/`. Cakupan/review: `reports/`.\n\n'
       f'Review: {state}. Kualitas: {quality}. Skala: relatif; belum ada ukuran nyata.\n\n'
       'Komponen tetap terpisah. Denah irisan belum merupakan denah arsitektur final; furnitur dapat muncul sebagai garis. '
       'Kalibrasi ukuran pada HTML memerlukan jarak nyata dan tidak menjamin distorsi geometri telah tervalidasi.\n')
+    if bundle.get('global_architecture'):
+        info = bundle['global_architecture']
+        summary += ('\nAlignment global: '+info['status']+'. Bukti: `reports/global-alignment.json`. '
+                    'Fallback: '+', '.join(info['fallback_components'])+'.\n')
+        if info.get('component'):
+            summary += ('Kandidat gabungan: `mesh/architecture.glb`, denah `denah/architecture.*` dan pilihan Arsitektur gabungan pada HTML. '
+                        'Triangle diamati digabung; belum global TSDF, pemulihan lubang, survei meter atau validasi kualitas.\n')
     with (delivery/'README.md').open('x') as stream:stream.write(summary)
     artifacts=[dict(file=str(p.relative_to(delivery)),sha256=sha256_file(p),size_bytes=p.stat().st_size)
                for p in sorted(delivery.rglob('*')) if p.is_file()]
-    manifest=dict(schema_version=1,job_id=bundle['job_id'],execution_status='completed',review_status=state,
+    manifest=dict(schema_version=1,job_id=bundle['job_id'],scope=scope,execution_status='completed',review_status=state,
                   quality_status=quality,scale_status='relative',full_room_reconstruction_complete=False,
                   coverage=bundle['coverage'],failed_components=bundle.get('failed_components',[]),artifacts=artifacts)
+    if bundle.get('global_architecture'):
+        info = bundle['global_architecture']
+        manifest['global_architecture'] = {key: info[key] for key in ('status', 'aligned_components', 'fallback_components')}
     with (delivery/'manifest.json').open('x') as stream:json.dump(manifest,stream,indent=2,allow_nan=False)
     atomic_json(delivery.parent/'latest.json',dict(delivery=delivery.name,review_status=state,quality_status=quality))
     return manifest

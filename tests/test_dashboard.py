@@ -42,6 +42,51 @@ p.write_text(json.dumps({'execution_status':'completed','review_status':'pending
         atomic_json(p/'job-status.json',{'execution_status':'completed','review_status':'pending','quality_status':'unassessed','scale_status':'relative','coverage':{'attempted':8,'processed':7,'gaps':['f8']}})
         return p
 
+    def review_job(self, jid='existing'):
+        directory=self.job(jid)
+        review_dir=directory/'review/round_00/request_001';review_dir.mkdir(parents=True)
+        packet={
+            'schema_version':1,'job_id':jid,'scope':None,'review_round':0,
+            'component_ids':['main'],'coverage':{'attempted':8,'processed':7,'gaps':['f8'],
+                                                  'full_room_reconstruction_complete':False},
+            'scale_status':'relative','failed_components':[],
+            'evidence':['outputs/jobs/'+jid+'/qa/v001/overview.png'],
+            'delivery':'end_product/'+jid+'/v001','candidate_ids':['baseline'],
+            'candidates':{},'limitations':['Relative units; no measured reference.'],
+            'baseline_bundle_file':'outputs/jobs/'+jid+'/review-bundle.json',
+            'review_input_sha256':'fixture',
+        }
+        atomic_json(review_dir/'review-input.json',packet)
+        state=json.loads((directory/'job-status.json').read_text())
+        state['review_input']=str((review_dir/'review-input.json').relative_to(self.root))
+        atomic_json(directory/'job-status.json',state)
+        return directory,review_dir
+
+    def test_review_session_exposes_safe_summary(self):
+        directory,review_dir=self.review_job()
+        qa=directory/'qa/v001';qa.mkdir(parents=True);(qa/'overview.png').write_bytes(b'preview')
+        result=self.service.review_session('existing')
+        self.assertTrue(result['available']);self.assertFalse(result['applied'])
+        self.assertEqual(result['coverage']['gaps'],['f8'])
+        self.assertEqual(result['component_count'],1)
+        self.assertIn('outputs/jobs/existing/qa/v001/overview.png',result['evidence'])
+
+    def test_dashboard_review_mapping_requires_reason_and_writes_schema_payload(self):
+        directory,review_dir=self.review_job()
+        with self.assertRaises(ValueError):self.service.apply_dashboard_review('existing','reject',' ')
+        with patch('room_reconstruction.pipeline_cli.apply_manual_review',return_value=0) as apply:
+            result=self.service.apply_dashboard_review('existing','reject','Geometry has large holes')
+        self.assertEqual(result['decision'],'needs_capture');self.assertEqual(result['quality_status'],'needs_capture')
+        payload=json.loads((review_dir/'manual.json').read_text())
+        self.assertEqual(payload['decision'],'needs_capture');self.assertEqual(payload['summary'],'Geometry has large holes')
+        self.assertFalse(payload['full_room_reconstruction_complete']);apply.assert_called_once()
+
+    def test_dashboard_accept_with_gaps_maps_to_partial_quality(self):
+        directory,review_dir=self.review_job()
+        with patch('room_reconstruction.pipeline_cli.apply_manual_review',return_value=0):
+            result=self.service.apply_dashboard_review('existing','accept','Usable for exploration')
+        self.assertEqual(result['decision'],'accept');self.assertEqual(result['quality_status'],'accepted_partial')
+
     def test_upload_commits_only_complete_stream_and_lists_video(self):
         result=self.service.save_upload(io.BytesIO(b'123456'),6,'phone.MOV')
         self.assertEqual((self.root/result['path']).read_bytes(),b'123456')
@@ -73,10 +118,20 @@ p.write_text(json.dumps({'execution_status':'completed','review_status':'pending
     def test_new_and_legacy_jobs_are_read_without_quality_acceptance(self):
         self.job();self.job('legacy',legacy=True)
         self.assertEqual({j['job_id'] for j in self.service.jobs()},{'existing','legacy'})
-        view=self.service.job_view('existing')
-        self.assertEqual(view['review_status'],'pending');self.assertEqual(view['scale_status'],'relative')
-        self.assertEqual(view['coverage']['processed'],7)
 
+    def test_start_job_passes_single_room_scope_and_job_view_exposes_it(self):
+        with patch('room_reconstruction.dashboard_service.register_job') as register:
+            register.side_effect=lambda *args, **kwargs: atomic_json(
+                self.root/'outputs/jobs/workshop_001/job.json',
+                {'job_id':'workshop_001','scope':kwargs['scope']})
+            with patch.object(self.service, '_launch', return_value={'job_id':'workshop_001'}):
+                self.service.start_job('raw_videos/source.MOV','workshop_001',scope={
+                    'kind':'single_room','name':'Workshop'})
+            self.assertEqual(register.call_args.kwargs['scope']['kind'],'single_room')
+            atomic_json(self.root/'outputs/jobs/workshop_001/job-status.json',
+                        {'execution_status':'queued','review_status':'pending','quality_status':'unassessed'})
+            view=self.service.job_view('workshop_001')
+            self.assertEqual(view['scope']['name'],'Workshop')
     def test_snapshot_omits_huge_specs_bounds_logs_and_ignores_partial_event(self):
         p=self.job();atomic_json(p/'stages.json',{'S03_camera':[{'run_id':'r1','status':'passed','spec':{'big':'x'*10000},'artifacts':{'big':'hash'},'elapsed_seconds':2}]})
         (p/'logs').mkdir();(p/'logs/r1.log').write_text('x'*50000)
@@ -135,6 +190,11 @@ p.write_text(json.dumps({'execution_status':'completed','review_status':'pending
         self.assertEqual(request('POST','/api/jobs','{}',headers)[0],403)
         headers.update(Origin='http://'+host)
         self.assertEqual(request('POST','/api/jobs',json.dumps({'input_path':'raw_videos/source.MOV','job_id':'bad/id'}),headers)[0],400)
+        with patch.object(self.service,'start_job',return_value={'job_id':'workshop_001'}) as start:
+            status,body,_=request('POST','/api/jobs',json.dumps({'input_path':'raw_videos/source.MOV','job_id':'workshop_001',
+                'scope':{'kind':'single_room','name':'Workshop'}}),headers)
+            self.assertEqual(status,201)
+            self.assertEqual(start.call_args.args[2]['kind'],'single_room')
         status,body,h=request('GET','/api/video?path=raw_videos/source.MOV',headers={'Range':'bytes=1-4'})
         self.assertEqual(status,206);self.assertEqual(body,b'ideo');self.assertEqual(h['Content-Range'],'bytes 1-4/11')
         self.assertEqual(request('GET','/api/video?path=../configs/paths.server.yaml')[0],400)
@@ -143,6 +203,21 @@ p.write_text(json.dumps({'execution_status':'completed','review_status':'pending
         self.assertEqual(status,201)
         uploaded=json.loads(body)['path']
         self.assertEqual(request('GET','/api/video?path='+uploaded)[1],b'upload bytes')
+
+    def test_http_manual_review_endpoint_requires_token_and_reject_reason(self):
+        self.review_job();server=make_server(self.service,port=0);thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
+        self.addCleanup(server.server_close);self.addCleanup(server.shutdown)
+        host=f'127.0.0.1:{server.server_port}'
+        def request(body,headers=None):
+            c=http.client.HTTPConnection('127.0.0.1',server.server_port,timeout=5)
+            c.request('POST','/api/jobs/existing/review',body=json.dumps(body),headers=headers or {'Content-Type':'application/json'});r=c.getresponse();data=r.read();status=r.status;c.close();return status,data
+        status,_=request({'decision':'reject','reason':'x'});self.assertEqual(status,403)
+        c=http.client.HTTPConnection('127.0.0.1',server.server_port,timeout=5);c.request('GET','/api/config');response=c.getresponse();token=json.loads(response.read())['token'];c.close()
+        headers={'Content-Type':'application/json','X-ArchiCon-Token':token,'Origin':'http://'+host}
+        self.assertEqual(request({'decision':'reject','reason':' '},headers)[0],400)
+        with patch.object(self.service,'apply_dashboard_review',return_value={'decision':'needs_capture'}):
+            status,body=request({'decision':'reject','reason':'holes'},headers)
+        self.assertEqual(status,200);self.assertEqual(json.loads(body)['decision'],'needs_capture')
 
 
 if __name__=='__main__':unittest.main()

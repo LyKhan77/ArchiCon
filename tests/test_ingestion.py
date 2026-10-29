@@ -10,10 +10,29 @@ from pathlib import Path
 
 import cv2
 
-from room_reconstruction.ingestion import _extract_frames, assign_splits, audit_video, choose_best_frames, parse_timestamps
+from room_reconstruction.ingestion import (_extract_frames, assign_splits, audit_video,
+                                           choose_adaptive_frames, choose_best_frames, parse_timestamps,
+                                           _contact_sheets)
 
 
 class IngestionTests(unittest.TestCase):
+    def test_contact_sheet_recovers_missing_thumbnail_from_extracted_frame(self):
+        with tempfile.TemporaryDirectory() as temp:
+            run = Path(temp)
+            (run / "review/thumbnails").mkdir(parents=True)
+            (run / "frames").mkdir()
+            image = 255 * __import__("numpy").ones((24, 32, 3), dtype="uint8")
+            self.assertTrue(cv2.imwrite(str(run / "frames/keyframe_000000.jpg"), image))
+            row = {
+                "source_index": 1513,
+                "timestamp_seconds": 12.5,
+                "thumbnail_path": "review/thumbnails/frame_001513.jpg",
+                "image_path": "frames/keyframe_000000.jpg",
+            }
+            result = _contact_sheets(run, [row], "overview")
+            self.assertEqual(result, ["review/overview_01.jpg"])
+            self.assertIsNotNone(cv2.imread(str(run / row["thumbnail_path"])))
+
     def test_audit_cli_persists_failure_when_provenance_collection_fails(self):
         script = Path(__file__).resolve().parents[1] / "scripts/audit_video.py"
         spec = importlib.util.spec_from_file_location("audit_cli_test", script)
@@ -54,6 +73,24 @@ class IngestionTests(unittest.TestCase):
         chosen = choose_best_frames(rows, target_fps=2, max_keyframes=10)
         self.assertEqual([r["source_index"] for r in chosen], [1, 3, 4])
         self.assertEqual(len(choose_best_frames(rows, 2, 2)), 2)
+
+    def test_adaptive_selection_adds_original_frames_in_motion_windows(self):
+        rows = [dict(source_index=i, timestamp_seconds=i * .125, sharpness=10 + i,
+                     motion_score=.9 if 1.0 <= i * .125 < 1.5 else .0)
+                for i in range(16)]
+        chosen = choose_adaptive_frames(rows, base_fps=2, high_fps=4, motion_threshold=.5,
+                                        max_keyframes=30)
+        self.assertGreater(len(chosen), len(choose_best_frames(rows, 2, 30)))
+        self.assertEqual([row['source_index'] for row in chosen], sorted({row['source_index'] for row in chosen}))
+        self.assertTrue(all(row in rows for row in chosen))
+
+    def test_adaptive_selection_is_bounded_and_validates_rates(self):
+        rows = [dict(source_index=i, timestamp_seconds=i / 10, sharpness=1, motion_score=.9)
+                for i in range(100)]
+        self.assertEqual(len(choose_adaptive_frames(rows, 2, 4, .5, 12)), 12)
+        for args in [(0, 4, .5, 12), (2, 1, .5, 12), (2, 4, -0.1, 12)]:
+            with self.subTest(args=args), self.assertRaises(ValueError):
+                choose_adaptive_frames(rows, *args)
 
     def test_temporal_split_is_deterministic_and_never_splits_a_block(self):
         times = [i * 0.5 for i in range(40)]

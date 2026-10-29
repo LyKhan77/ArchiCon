@@ -2,7 +2,13 @@ schema_version: 1
 profile: room-tour
 processing:
   keyframe_target_fps: 2
-  matching: auto
+  sampling_mode: adaptive
+  adaptive_target_fps: 4
+  motion_threshold: 0.03
+  matching: sequential
+  overlap: 32
+  loop_detection: false
+  global_alignment: true
   max_exhaustive_frames: 400
   depth_resolution: 504
   confidence_quantile: 0.02

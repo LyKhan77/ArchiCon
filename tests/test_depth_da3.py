@@ -171,6 +171,26 @@ class DA3ContractTests(unittest.TestCase):
                 cli.fresh_resource_guard(Path(temp), {'compute': {'gpu_selector': uuid}}, 'resources.json')
             self.assertEqual(cli.os.environ['CUDA_VISIBLE_DEVICES'], uuid)
 
+    def test_fresh_guard_allows_selected_physical_gpu_one(self):
+        path = Path(__file__).resolve().parents[1] / 'scripts/smoke_da3.py'
+        spec = importlib.util.spec_from_file_location('smoke_da3_gpu_one_test', path)
+        cli = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cli)
+        uuid = 'GPU-00000000-0000-4000-8000-000000000002'
+        replies = [
+            SimpleNamespace(stdout=(
+                '0, GPU-00000000-0000-4000-8000-000000000001, Test GPU, 32768, 16000, 0\n'
+                f'1, {uuid}, Test GPU, 32768, 16000, 0\n')),
+            SimpleNamespace(stdout=''),
+        ]
+        with TemporaryDirectory() as temp, patch.object(cli.subprocess, 'run', side_effect=replies), \
+                patch.object(cli.Path, 'read_text', return_value='MemAvailable: 16777216 kB\n'), \
+                patch.object(cli.shutil, 'disk_usage', return_value=SimpleNamespace(free=100 * 1024**3)), \
+                patch.dict(cli.os.environ, {}, clear=True):
+            resources = cli.fresh_resource_guard(Path(temp), {'compute': {'gpu_selector': uuid}}, 'resources.json')
+            self.assertEqual(resources['selected_gpu']['index'], 1)
+            self.assertEqual(cli.os.environ['CUDA_VISIBLE_DEVICES'], uuid)
+
 
 if __name__ == '__main__':
     unittest.main()

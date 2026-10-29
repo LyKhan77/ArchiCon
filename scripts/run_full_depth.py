@@ -66,7 +66,7 @@ def execute(run,args):
     from depth_anything_3 import api
     if Path(api.__file__).resolve()!=vendor/'depth_anything_3/api.py':raise ValueError('Unexpected DA3 import source')
     if torch.cuda.device_count()!=1 or os.environ['CUDA_VISIBLE_DEVICES']!=resources['selected_gpu']['uuid']:
-        raise ValueError('Expose only selected physical GPU0 UUID')
+        raise ValueError('Expose only the selected physical GPU UUID')
     torch.set_num_threads(4);torch.set_num_interop_threads(1);cv2.setNumThreads(1)
     torch.cuda.set_per_process_memory_fraction(min(1.,12*1024**3/torch.cuda.get_device_properties(0).total_memory),0)
     torch.cuda.reset_peak_memory_stats(0)

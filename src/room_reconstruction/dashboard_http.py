@@ -122,10 +122,15 @@ def make_server(service, *, port=8765):
                     return self._json(201,result)
                 if path=='/api/jobs':
                     data=self._body()
-                    return self._json(201,service.start_job(data.get('input_path',''),data.get('job_id','')))
+                    return self._json(201,service.start_job(data.get('input_path',''),data.get('job_id',''),data.get('scope')))
                 match=re.fullmatch(r'/api/jobs/([A-Za-z0-9_-]+)/resume',path)
                 if match:
                     return self._json(202,service.resume_job(match.group(1)))
+                match=re.fullmatch(r'/api/jobs/([A-Za-z0-9_-]+)/review',path)
+                if match:
+                    data=self._body()
+                    result=service.apply_dashboard_review(match.group(1),data.get('decision',''),data.get('reason',''))
+                    return self._json(200,result)
             raise FileNotFoundError('Endpoint tidak ditemukan')
 
         def _handle(self):
