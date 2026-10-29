@@ -217,9 +217,17 @@ class DashboardService:
         if not path.is_relative_to(directory/'review') or not path.is_file():return result
         packet=read_json(path)
         public=self._public(jid)
+        def evidence_rank(item):
+            name,kind=item;lower=name.lower();suffix=Path(name).suffix.lower()
+            if kind=='preview' and ('overview' in lower or 'floorplan' in lower):return 0
+            if kind=='preview':return 1
+            if '/denah/' in lower and suffix in ('.png','.svg'):return 2
+            if suffix=='.html':return 3
+            return 9
+        evidence=[name for name,kind in sorted(public.items(),key=evidence_rank)
+                  if kind=='preview' or Path(name).suffix.lower() in ('.png','.jpg','.jpeg','.svg','.html')]
         result.update(available=True,coverage=packet.get('coverage') or result['coverage'],
-                      component_count=len(packet.get('component_ids',[])),
-                      evidence=[name for name,kind in public.items() if kind in ('preview','product')])
+                      component_count=len(packet.get('component_ids',[])),evidence=evidence[:16])
         return result
 
     def apply_dashboard_review(self,jid,decision,reason=''):
