@@ -204,6 +204,58 @@ class DashboardService:
             return archive
         except BaseException: archive.unlink(missing_ok=True);raise
 
+    def review_session(self,jid):
+        """Return a safe, global review summary for the completed job."""
+        job=self._job(jid);directory=job_dir(self.root,jid);state=read_json(directory/'job-status.json')
+        result=dict(available=False,applied=state.get('review_status') not in (None,'pending'),
+                    review_input=state.get('review_input'),coverage=state.get('coverage') or {},
+                    component_count=0,evidence=[],delivery=state.get('delivery'),
+                    quality_status=state.get('quality_status','unassessed'))
+        review_input=state.get('review_input')
+        if not review_input:return result
+        path=self._safe(review_input,'outputs')
+        if not path.is_relative_to(directory/'review') or not path.is_file():return result
+        packet=read_json(path)
+        public=self._public(jid)
+        result.update(available=True,coverage=packet.get('coverage') or result['coverage'],
+                      component_count=len(packet.get('component_ids',[])),
+                      evidence=[name for name,kind in public.items() if kind in ('preview','product')])
+        return result
+
+    def apply_dashboard_review(self,jid,decision,reason=''):
+        """Apply one simple global decision through the existing review contract."""
+        mapping={'accept':('accept','accepted'),'needs_review':('needs_human_review','unassessed'),
+                 'reject':('needs_capture','needs_capture')}
+        if decision not in mapping:raise ValueError('Keputusan review tidak valid')
+        reason=str(reason or '').strip()
+        if decision=='reject' and not reason:raise ValueError('Alasan wajib untuk Reject')
+        job=self._job(jid);directory=job_dir(self.root,jid);state=read_json(directory/'job-status.json')
+        session=self.review_session(jid)
+        if not session['available']:raise ValueError('Sesi review belum tersedia')
+        input_file=self._safe(session['review_input'],'outputs');review_dir=input_file.parent
+        existing=read_json(review_dir/'agent-review.json')
+        if session['applied'] and existing:
+            expected=mapping[decision][0]
+            if existing.get('decision')==expected:
+                return dict(existing,delivery=state.get('delivery'),review_file=str((review_dir/'agent-review.json').relative_to(self.root)),already_applied=True)
+            raise ValueError('Review untuk sesi ini sudah diterapkan')
+        packet=read_json(input_file);coverage=packet.get('coverage') or {}
+        internal,quality=mapping[decision]
+        if decision=='accept' and (coverage.get('gaps') or packet.get('failed_components')):quality='accepted_partial'
+        summary=reason or {'accept':'Manual review diterima.','needs_review':'Menunggu review lanjutan.'}[decision]
+        candidates=packet.get('candidate_ids') or ['baseline'];selected='baseline' if 'baseline' in candidates else candidates[0]
+        payload=dict(schema_version=1,job_id=jid,review_round=packet['review_round'],
+                     review_input_sha256=packet['review_input_sha256'],decision=internal,
+                     quality_status=quality,summary=summary,findings=[],refinement_requests=[],
+                     required_user_actions=[],scale_status=packet.get('scale_status','relative'),
+                     full_room_reconstruction_complete=False,selected_candidate_id=selected)
+        atomic_json(review_dir/'manual.json',payload)
+        from .pipeline_cli import apply_manual_review
+        apply_manual_review(self.root,job,str((review_dir/'manual.json').relative_to(self.root)),
+                            review_input=str(input_file.relative_to(self.root)))
+        updated=read_json(directory/'job-status.json')
+        return dict(payload,delivery=updated.get('delivery'),review_file=str((review_dir/'agent-review.json').relative_to(self.root)))
+
     def job_view(self,jid):
         job=self._job(jid); directory=job_dir(self.root,jid); state=read_json(directory/'job-status.json')
         saved=read_json(directory/'dashboard-snapshot.json')
@@ -234,6 +286,7 @@ class DashboardService:
                     reason=state.get('reason') or live.get('worker',{}).get('reason',''),phase=local_phase,
                     stages=live.get('stages',[]),worker=live.get('worker',{}),previews=previews[:12],downloads=downloads,
                     delivery=state.get('delivery'),input_path=job.get('local_input_video'),
+                    review=self.review_session(jid),
                     elapsed_seconds=elapsed,elapsed_basis=elapsed_basis,
                     controller_active=bool(active),started_at=control.get('started_at') if active else None,
                     telemetry=dict(updated_at=live.get('updated_at'),stale=bool(active and (age is None or age>20)),error=live.get('error','')),
