@@ -4,6 +4,11 @@ Completed changes are recorded here. Versions describe source checkpoints; priva
 
 ## [Unreleased]
 
+### Manual review UI — 2026-10-29
+
+- Added a simple global review session to the dashboard Hasil akhir tab with local evidence links and Accept, Need review, or Reject/perlu rekaman ulang choices.
+- Reject requires a reason and maps to `needs_capture`; Accept with known gaps maps to `accepted_partial`. The existing JSON/CLI flow remains available for detailed review and refinement.
+
 ### Fixed — 2026-10-28
 
 - Added a regression check for the remote sync manifest and included `src/room_reconstruction/scope.py`. Remote workers now receive the scope module required by `pipeline_steps.py`.
